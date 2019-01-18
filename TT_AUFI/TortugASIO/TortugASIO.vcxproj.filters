@@ -1,0 +1,121 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="asio">
+      <UniqueIdentifier>{b2cd3aeb-dbf3-42e8-9ca6-1dc1bb0e3c5a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\ZTEX">
+      <UniqueIdentifier>{99977dbd-077e-4450-a655-93b501d24741}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\USBDk">
+      <UniqueIdentifier>{333de427-519b-4766-85e7-2e93e9cbb475}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\UsbDev">
+      <UniqueIdentifier>{943b4181-64f5-4b12-a6a5-4c95401302dd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\FX2LP">
+      <UniqueIdentifier>{12c23e0f-c0bb-41ba-bb0a-530f1a38e1e2}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="ReadMe.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="stdafx.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="targetver.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ASIOSDK2.3\common\combase.h">
+      <Filter>asio</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ASIOSDK2.3\common\asiosys.h">
+      <Filter>asio</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ASIOSDK2.3\common\iasiodrv.h">
+      <Filter>asio</Filter>
+    </ClInclude>
+    <ClInclude Include="SettingsDlg.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TaskLock.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TortugASIO.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ZTEXDev\ztexdev.h">
+      <Filter>Source Files\ZTEX</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UsbDK\UsbDKWrap.h">
+      <Filter>Source Files\USBDk</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UsbDev\UsbDev.h">
+      <Filter>Source Files\UsbDev</Filter>
+    </ClInclude>
+    <ClInclude Include="..\FX2LP\CypressDevice.h">
+      <Filter>Source Files\FX2LP</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="TortugASIO.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\asiosdk2.3\common\combase.cpp">
+      <Filter>asio</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\asiosdk2.3\common\dllentry.cpp">
+      <Filter>asio</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\asiosdk2.3\common\register.cpp">
+      <Filter>asio</Filter>
+    </ClCompile>
+    <ClCompile Include="Main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SettingsDlg.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="TaskLock.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ZTEXDev\ztexdev.cpp">
+      <Filter>Source Files\ZTEX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UsbDK\UsbDKWrap.cpp">
+      <Filter>Source Files\USBDk</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UsbDev\UsbDev.cpp">
+      <Filter>Source Files\UsbDev</Filter>
+    </ClCompile>
+    <ClCompile Include="..\FX2LP\CypressDevice.cpp">
+      <Filter>Source Files\FX2LP</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="TortugASIO.def">
+      <Filter>Source Files</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="TortugASIO.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+</Project>
