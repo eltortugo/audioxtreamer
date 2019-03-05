@@ -1,36 +1,96 @@
 #include "stdafx.h"
-
-#if defined (USBDK_LIB)
-#if defined _M_IX86
-#if defined( _DEBUG)
-#pragma comment(lib,"lib\\UsbDkHelperx86d.lib")
-#else
-#pragma comment(lib,"lib\\UsbDkHelperx86.lib")
-#endif
-#elif defined _M_X64
-#if defined( _DEBUG)
-#pragma comment(lib, "lib\\UsbDkHelperx64d.lib")
-#else
-#pragma comment(lib, "lib\\UsbDkHelperx64.lib")
-#endif
-#endif
-#else
-#if defined _M_IX86
-#if defined( _DEBUG)
-#pragma comment(lib,"Install_Debug\\x86\\Win10Debug\\UsbDkHelper.lib")
-#else
-#pragma comment(lib,"Install\\x86\\Win10Release\\UsbDkHelper.lib")
-#endif
-#elif defined _M_X64
-#if defined( _DEBUG)
-#pragma comment(lib,"Install_Debug\\x64\\Win10Debug\\UsbDkHelper.lib")
-#else
-#pragma comment(lib,"Install\\x64\\Win10Release\\UsbDkHelper.lib")
-#endif
-#endif
-#endif
-
 #include "UsbDKWrap.h"
+
+
+usbdk_lib UsbDk;
+
+static FARPROC get_usbdk_proc_addr(LPCSTR api_name)
+{
+  FARPROC api_ptr = GetProcAddress(UsbDk.module, api_name);
+
+  if (api_ptr == NULL)
+    LOGN( "UsbDkHelper API %s not found: 0x%08X", api_name, GetLastError());
+
+  return api_ptr;
+}
+
+void unload_usbdk(void)
+{
+  if (UsbDk.module != NULL) {
+    FreeLibrary(UsbDk.module);
+    UsbDk.module = NULL;
+  }
+}
+
+bool load_usbdk()
+{
+  UsbDk.module = LoadLibraryA("UsbDkHelper");
+  if (UsbDk.module == NULL) {
+    LOGN("Failed to load UsbDkHelper.dll: 0x%08X", GetLastError());
+    return false;
+  }
+
+  UsbDk.GetDevicesList = (USBDK_GET_DEVICES_LIST)get_usbdk_proc_addr( "UsbDk_GetDevicesList");
+  if (UsbDk.GetDevicesList == NULL)
+    goto error_unload;
+
+  UsbDk.ReleaseDevicesList = (USBDK_RELEASE_DEVICES_LIST)get_usbdk_proc_addr( "UsbDk_ReleaseDevicesList");
+  if (UsbDk.ReleaseDevicesList == NULL)
+    goto error_unload;
+
+  UsbDk.StartRedirect = (USBDK_START_REDIRECT)get_usbdk_proc_addr( "UsbDk_StartRedirect");
+  if (UsbDk.StartRedirect == NULL)
+    goto error_unload;
+
+  UsbDk.StopRedirect = (USBDK_STOP_REDIRECT)get_usbdk_proc_addr( "UsbDk_StopRedirect");
+  if (UsbDk.StopRedirect == NULL)
+    goto error_unload;
+
+  UsbDk.GetConfigurationDescriptor = (USBDK_GET_CONFIGURATION_DESCRIPTOR)get_usbdk_proc_addr( "UsbDk_GetConfigurationDescriptor");
+  if (UsbDk.GetConfigurationDescriptor == NULL)
+    goto error_unload;
+
+  UsbDk.ReleaseConfigurationDescriptor = (USBDK_RELEASE_CONFIGURATION_DESCRIPTOR)get_usbdk_proc_addr( "UsbDk_ReleaseConfigurationDescriptor");
+  if (UsbDk.ReleaseConfigurationDescriptor == NULL)
+    goto error_unload;
+
+  UsbDk.ReadPipe = (USBDK_READ_PIPE)get_usbdk_proc_addr( "UsbDk_ReadPipe");
+  if (UsbDk.ReadPipe == NULL)
+    goto error_unload;
+
+  UsbDk.WritePipe = (USBDK_WRITE_PIPE)get_usbdk_proc_addr( "UsbDk_WritePipe");
+  if (UsbDk.WritePipe == NULL)
+    goto error_unload;
+
+  UsbDk.AbortPipe = (USBDK_ABORT_PIPE)get_usbdk_proc_addr( "UsbDk_AbortPipe");
+  if (UsbDk.AbortPipe == NULL)
+    goto error_unload;
+
+  UsbDk.ResetPipe = (USBDK_RESET_PIPE)get_usbdk_proc_addr( "UsbDk_ResetPipe");
+  if (UsbDk.ResetPipe == NULL)
+    goto error_unload;
+
+  UsbDk.SetAltsetting = (USBDK_SET_ALTSETTING)get_usbdk_proc_addr( "UsbDk_SetAltsetting");
+  if (UsbDk.SetAltsetting == NULL)
+    goto error_unload;
+
+  UsbDk.ResetDevice = (USBDK_RESET_DEVICE)get_usbdk_proc_addr( "UsbDk_ResetDevice");
+  if (UsbDk.ResetDevice == NULL)
+    goto error_unload;
+
+  UsbDk.GetRedirectorSystemHandle = (USBDK_GET_REDIRECTOR_SYSTEM_HANDLE)get_usbdk_proc_addr( "UsbDk_GetRedirectorSystemHandle");
+  if (UsbDk.GetRedirectorSystemHandle == NULL)
+    goto error_unload;
+
+  return true;
+
+error_unload:
+  FreeLibrary(UsbDk.module);
+  UsbDk.module = NULL;
+  return false;
+}
+
+
 
 struct libusb_control_setup {
   /** Request type. Bits 0:4 determine recipient, see
@@ -80,10 +140,10 @@ int control_transfer(HANDLE handle, uint8_t bmRequestType, uint8_t bRequest, uin
   TransferResult result;
 
   if (bmRequestType & 0x80)
-    result = UsbDk_ReadPipe(handle, &xfer, nullptr);// &ovlp);
+    result = UsbDk.ReadPipe(handle, &xfer, nullptr);// &ovlp);
   else {
     memcpy(buffer + sizeof(libusb_control_setup), data, wLength);
-    result = UsbDk_WritePipe(handle, &xfer, nullptr);// &ovlp);
+    result = UsbDk.WritePipe(handle, &xfer, nullptr);// &ovlp);
   }
 
   if (result != TransferFailure) {
@@ -113,9 +173,9 @@ int bulk_transfer(HANDLE handle,
 
   TransferResult result;
   if (endpoint & 0x80)
-    result = UsbDk_ReadPipe(handle, &xfer, ovlp);
+    result = UsbDk.ReadPipe(handle, &xfer, ovlp);
   else
-    result = UsbDk_WritePipe(handle, &xfer, ovlp);
+    result = UsbDk.WritePipe(handle, &xfer, ovlp);
 
   if(ovlp)
     WaitForSingleObject(ovlp->hEvent, timeout);

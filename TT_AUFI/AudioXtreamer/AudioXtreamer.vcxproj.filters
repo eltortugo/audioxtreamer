@@ -5,10 +5,6 @@
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
       <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
     </Filter>
-    <Filter Include="Header Files">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
-    </Filter>
     <Filter Include="Resource Files">
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
@@ -16,37 +12,25 @@
     <Filter Include="Source Files\ZTEX">
       <UniqueIdentifier>{48c3b9e8-f9db-4a84-8a75-ca295b3a4205}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\UsbDKWrap">
-      <UniqueIdentifier>{b406dc6f-17f1-470c-8292-7802db522f29}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Source Files\UsbDev">
       <UniqueIdentifier>{3a8da9fc-2043-47ea-b7ec-190833be9a54}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source Files\FX2LP">
       <UniqueIdentifier>{d4d1ff17-fc33-4005-9779-d18147750516}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\UsbDK">
+      <UniqueIdentifier>{b406dc6f-17f1-470c-8292-7802db522f29}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="stdafx.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="targetver.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Resource.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="CypressDevice.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\ZTEXDev\ztexdev.h">
       <Filter>Source Files\ZTEX</Filter>
     </ClInclude>
     <ClInclude Include="..\UsbDK\UsbDKWrap.h">
-      <Filter>Source Files\UsbDKWrap</Filter>
+      <Filter>Source Files\UsbDK</Filter>
     </ClInclude>
     <ClInclude Include="..\UsbDev\UsbDev.h">
       <Filter>Source Files\UsbDev</Filter>
@@ -59,6 +43,15 @@
     </ClInclude>
     <ClInclude Include="AudioXtreamer.h">
       <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="stdafx.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Resource.h">
+      <Filter>Resource Files</Filter>
+    </ClInclude>
+    <ClInclude Include="targetver.h">
+      <Filter>Resource Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -75,7 +68,7 @@
       <Filter>Source Files\ZTEX</Filter>
     </ClCompile>
     <ClCompile Include="..\UsbDK\UsbDKWrap.cpp">
-      <Filter>Source Files\UsbDKWrap</Filter>
+      <Filter>Source Files\UsbDK</Filter>
     </ClCompile>
     <ClCompile Include="..\UsbDev\UsbDev.cpp">
       <Filter>Source Files\UsbDev</Filter>

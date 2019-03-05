@@ -11,37 +11,13 @@
 
 #include "targetver.h"
 
-#define _ATL_CSTRING_EXPLICIT_CONSTRUCTORS      // some CString constructors will be explicit
-
-
-// turns off MFC's hiding of some common and often safely ignored warning messages
-#define _AFX_ALL_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
-
-#include <afxwin.h>         // MFC core and standard components
-#include <afxext.h>         // MFC extensions
-
-
-
-
-
-#ifndef _AFX_NO_OLE_SUPPORT
-#include <afxdtctl.h>           // MFC support for Internet Explorer 4 Common Controls
-#endif
-#ifndef _AFX_NO_AFXCMN_SUPPORT
-#include <afxcmn.h>             // MFC support for Windows Common Controls
-#endif // _AFX_NO_AFXCMN_SUPPORT
-
-#include <afxcontrolbars.h>     // MFC support for ribbons and control bars
-
-
+#include "Winsock2.h"
+#include <windows.h>
 
 #include <stdint.h>
 #include <cfgmgr32.h>
 #include <usb.h>
-
-#define USBDK_LIB
-#include "usbdkhelper.h"
 
 
 #ifdef _UNICODE
@@ -53,5 +29,9 @@
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #endif
 #endif
+
+#include <crtdbg.h>
+#define LOG0(x) _RPT0(_CRT_WARN, x##"\n")
+#define LOGN(x, ...) _RPTN(_CRT_WARN, x, __VA_ARGS__ )
 
 

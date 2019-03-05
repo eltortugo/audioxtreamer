@@ -28,6 +28,24 @@
     <Filter Include="Source Files\FX2LP">
       <UniqueIdentifier>{12c23e0f-c0bb-41ba-bb0a-530f1a38e1e2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\libs">
+      <UniqueIdentifier>{696ff202-4afa-4f4e-95ed-09d0d7f0d4d2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libs\NTray">
+      <UniqueIdentifier>{2b445f5a-f86d-4aaf-9d5d-83d0b728742e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libs\boost">
+      <UniqueIdentifier>{f80e8468-bde8-4c5c-bc3d-b8c9b1232cf6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libs\boost\property_tree">
+      <UniqueIdentifier>{471aa5e1-c56a-4e52-ae6b-1d07355fd54d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libs\boost\property_tree\detail">
+      <UniqueIdentifier>{928b05e8-65eb-431d-b4c9-d4104c79601d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Settings">
+      <UniqueIdentifier>{dc9cf763-0a66-466f-892c-2ef729ada42a}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Text Include="ReadMe.txt" />
@@ -48,13 +66,7 @@
     <ClInclude Include="..\..\ASIOSDK2.3\common\iasiodrv.h">
       <Filter>asio</Filter>
     </ClInclude>
-    <ClInclude Include="SettingsDlg.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="resource.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="TaskLock.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="TortugASIO.h">
@@ -71,6 +83,36 @@
     </ClInclude>
     <ClInclude Include="..\FX2LP\CypressDevice.h">
       <Filter>Source Files\FX2LP</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ASIOSDK2.3\common\asio.h">
+      <Filter>asio</Filter>
+    </ClInclude>
+    <ClInclude Include="MainFrame.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\libs\ntray\NTray.h">
+      <Filter>Source Files\libs\NTray</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\libs\boost_1_68_0\boost\property_tree\ini_parser.hpp">
+      <Filter>Source Files\libs\boost\property_tree</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\libs\boost_1_68_0\boost\property_tree\detail\ptree_utils.hpp">
+      <Filter>Source Files\libs\boost\property_tree\detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\libs\boost_1_68_0\boost\property_tree\detail\file_parser_error.hpp">
+      <Filter>Source Files\libs\boost\property_tree\detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\libs\boost_1_68_0\boost\property_tree\ptree.hpp">
+      <Filter>Source Files\libs\boost\property_tree</Filter>
+    </ClInclude>
+    <ClInclude Include="ASIOSettings.h">
+      <Filter>Source Files\Settings</Filter>
+    </ClInclude>
+    <ClInclude Include="ASIOSettingsFile.h">
+      <Filter>Source Files\Settings</Filter>
+    </ClInclude>
+    <ClInclude Include="SettingsDlg.h">
+      <Filter>Source Files\Settings</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -89,12 +131,6 @@
     <ClCompile Include="Main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="SettingsDlg.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="TaskLock.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\ZTEXDev\ztexdev.cpp">
       <Filter>Source Files\ZTEX</Filter>
     </ClCompile>
@@ -106,6 +142,21 @@
     </ClCompile>
     <ClCompile Include="..\FX2LP\CypressDevice.cpp">
       <Filter>Source Files\FX2LP</Filter>
+    </ClCompile>
+    <ClCompile Include="MainFrame.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\libs\ntray\NTray.cpp">
+      <Filter>Source Files\libs\NTray</Filter>
+    </ClCompile>
+    <ClCompile Include="ASIOSettings.cpp">
+      <Filter>Source Files\Settings</Filter>
+    </ClCompile>
+    <ClCompile Include="ASIOSettingsFile.cpp">
+      <Filter>Source Files\Settings</Filter>
+    </ClCompile>
+    <ClCompile Include="SettingsDlg.cpp">
+      <Filter>Source Files\Settings</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

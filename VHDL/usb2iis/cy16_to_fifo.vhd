@@ -19,23 +19,24 @@ entity usbf_to_fifo is
 generic(
   max_sdo_lines: positive := 32
 );
-  Port (    
+  Port (
     --usb interface
-    ft_clk : in STD_LOGIC;
-    ft_reset : in STD_LOGIC;
+    usb_clk : in STD_LOGIC;
+    reset : in STD_LOGIC;
     -- DATA IO
-    ft_oe  : in std_logic; --signals a read grant
-    rx_data : in slv_16;
+    usb_oe  : in std_logic; --signals a read grant
+    usb_data : in slv_16;
     -- FIFO control
-    ft_rxfe : in  STD_LOGIC;
-    ft_rd : buffer STD_LOGIC; --signals a read request 
+    usb_empty : in  STD_LOGIC;
+    usb_rd_req : out STD_LOGIC; --signals a read request 
 
-    params1 : out slv_16;
-	 params2 : out slv_16;
-    
-    out_fifo_wr_full : in std_logic_vector;
-    out_fifo_wr_en : out std_logic;
-    out_fifo_wr_data : out slv24_array(0 to (max_sdo_lines*2)-1)
+    nr_outputs : in std_logic_vector(3 downto 0);
+
+    out_fifo_full : in std_logic;
+    out_fifo_wr   : out std_logic;
+    out_fifo_data : out slv24_array(0 to (max_sdo_lines*2)-1);
+
+    valid_packet : out std_logic
     );
 end usbf_to_fifo;
 ------------------------------------------------------------------------------------------------------------
@@ -43,12 +44,9 @@ end usbf_to_fifo;
 
 architecture Behavioral of usbf_to_fifo is
 
--- FTDI interface 
-signal ftdi_reset:std_logic;
-signal ftdi_clk : std_logic;
+signal rd_data : std_logic_vector(15 downto 0);
 
-signal ftdi_rd_data : std_logic_vector(15 downto 0); --registered data from ftdi
-
+signal rd_req :std_logic;
 signal stall_rd :std_logic;
 
 signal rvalid   : std_logic;
@@ -58,10 +56,9 @@ signal final_rvalid   : std_logic;
 type rx_state_t is ( fts_idle , fts_cmd, fts_rd1, fts_rd2, fts_rd3 );
 signal ftdi_state : rx_state_t;
 -- packet decoding
-constant header_size : positive := 8;
-type command_words is array (2 downto 0) of std_logic_vector(15 downto 0); -- the last word will be read directly from the input
-constant header : std_logic_vector(15 downto 0) := X"55AA"; --zeros are the sd_lines count bytes
-signal cmd_words : command_words;
+
+constant header : slv_16 := X"55AA";
+signal cmd_reg : slv_16;
 signal cmd_valid: std_logic;
 
 signal outs_counter, active_outs: natural range 0 to max_sdo_lines;
@@ -91,7 +88,7 @@ attribute mark_debug of outs_counter   : signal is "true";
 attribute mark_debug of ftdi_state  : signal is "true";
 attribute mark_debug of cmd_valid   : signal is "true";
 --attribute mark_debug of out_fifo_wr_full: signal is "true";
-attribute mark_debug of out_fifo_wr_en  : signal is "true";
+attribute mark_debug of out_fifo_wr : signal is "true";
 --attribute mark_debug of out_fifo_wr_regs: signal is "true";
 --attribute mark_debug of out_fifo_wr_msb : signal is "true";
 
@@ -99,27 +96,24 @@ attribute mark_debug of out_fifo_wr_en  : signal is "true";
 ------------------------------------------------------------------------------------------------------------
 begin
 
-ftdi_clk <= ft_clk;
-ftdi_reset <= ft_reset;
-
 ------------------------------------------------------------------------------------------------------------
-register_inputs : process (ftdi_clk)
+register_inputs : process (usb_clk)
 begin
-  if rising_edge(ftdi_clk) then
-    if ftdi_reset = '1' then
-      ftdi_rd_data <= X"CDCD";      
-    else      
-      ftdi_rd_data <= rx_data;      
+  if rising_edge(usb_clk) then
+    if reset = '1' then
+      rd_data <= X"CDCD";
+    else
+      rd_data <= usb_data;
     end if;
   end if;
 end process;
 ------------------------------------------------------------------------------------------------------------
-rvalid_reg : process (ftdi_clk)
+rvalid_reg : process (usb_clk)
 begin
-  if rising_edge(ftdi_clk) then
-    if ftdi_reset = '1' then
+  if rising_edge(usb_clk) then
+    if reset = '1' then
       rvalid <= '0';
-    elsif ft_rxfe = '0' and ft_rd = '1' and ft_oe = '1' then 
+    elsif usb_empty = '0' and rd_req = '1' and usb_oe = '1' then 
       rvalid <= '1';
     else
       rvalid <= '0';
@@ -127,11 +121,11 @@ begin
   end if;
 end process;
 ------------------------------------------------------------------------------------------------------------
-read_reg : process (ftdi_clk)
+read_reg : process (usb_clk)
 begin
-  if rising_edge(ftdi_clk) then
-    if ftdi_reset = '1'
-     or (outs_counter = active_outs-1 and out_fifo_wr_full /= 0) then     
+  if rising_edge(usb_clk) then
+    if reset = '1'
+     or (outs_counter = active_outs-1 and out_fifo_full = '1') then
       stall_rd <= '1';
     else
       stall_rd <= '0';
@@ -139,114 +133,93 @@ begin
   end if;
 end process;
 ------------------------------------------------------------------------------------------------------------
-ft_rd <= '0' when (ftdi_state = fts_rd3 and stall_rd = '1') or ftdi_state = fts_idle else '1';
+rd_req <= '0' when (ftdi_state = fts_rd3 and stall_rd = '1') or ftdi_state = fts_idle else '1';
+usb_rd_req <= rd_req;
 ------------------------------------------------------------------------------------------------------------
-ftdi_state_FSM: process (ftdi_clk)
+ftdi_state_FSM: process (usb_clk)
 begin
-  if rising_edge(ftdi_clk) then
-    if ftdi_reset = '1' then
+  if rising_edge(usb_clk) then
+    if reset = '1' then
       ftdi_state <= fts_idle;
     else  
       case ftdi_state is
       when fts_idle =>
-        if ft_oe = '1' and ft_rxfe = '0' then 
+        if usb_oe = '1' and usb_empty = '0' then
           ftdi_state <= fts_cmd;
         end if;
       when fts_cmd =>
         if cmd_valid = '1' then
-          if active_outs /= 0 then --there is output data and          
+          if active_outs /= 0 then --there is output data and
             ftdi_state <= fts_rd1;
           else
             ftdi_state <= fts_idle;
-          end if; 
+          end if;
         end if;
       when fts_rd1 =>
-        if rvalid = '1' then         
+        if rvalid = '1' then
           ftdi_state <= fts_rd2;
         end if;
       when fts_rd2 =>
-        if rvalid = '1' then  
+        if rvalid = '1' then
           ftdi_state <= fts_rd3;
         end if;
-      when fts_rd3 =>             
-        if outs_counter < active_outs-1  then 
-          if rvalid = '1' then          
+      when fts_rd3 =>
+        if outs_counter < active_outs-1  then
+          if rvalid = '1' then
             ftdi_state <= fts_rd1;
           end if;
         else
-          if out_fifo_wr_full = 0 then --only if we manage to write, otherwise wait here
-            if ft_oe = '1' and ft_rxfe = '0' then -- more to read?
+          if out_fifo_full = '0' then --only if we manage to write, otherwise wait here
+            if usb_oe = '1' and usb_empty = '0' then -- more to read?
               ftdi_state <= fts_cmd;
             else
               ftdi_state <= fts_idle;
             end if;
           end if;
         end if;
-      end case;    
+      end case;
     end if;
   end if; 
 end process;
 
 ------------------------------------------------------------------------------------------------------------
-cmd_valid <= '1' when ftdi_state = fts_cmd and cmd_words(2) = header and ftdi_rd_data = X"00FF" else '0';
+cmd_valid <= '1' when ftdi_state = fts_cmd and cmd_reg = header and rd_data = X"AA55" else '0';
+valid_packet <= cmd_valid;
 ------------------------------------------------------------------------------------------------------------
-process (ftdi_clk)
+process (usb_clk)
 begin
-  if rising_edge(ftdi_clk) then    
-    if ftdi_reset = '1' or ftdi_state = fts_idle then 
-      cmd_words <= (others => (others => '0'));
+  if rising_edge(usb_clk) then
+    if reset = '1' or ftdi_state = fts_idle then
+      cmd_reg <= X"0000";
     elsif ftdi_state = fts_cmd then
-      if rvalid = '1' then  
+      if rvalid = '1' then
         if cmd_valid = '0' then
-          cmd_words <= cmd_words(1 downto 0) & ftdi_rd_data;
-        else        
-          cmd_words(2) <= ( X"0000" ); -- invalidate the header but keep the params
+          cmd_reg <= rd_data;
+        else
+          cmd_reg <= X"0000" ; -- invalidate the header
         end if;
       end if;
     end if; 
   end if;
 end process;
-------------------------------------------------------------------------------------------------------------
-process (ftdi_clk)
-begin
-  if rising_edge(ftdi_clk) then    
-    if ftdi_reset = '1' then 
-      params1  <= (others => '0');
-		params2  <= (others => '0');
-    elsif cmd_valid = '1' then
-      params1 <= cmd_words(1);
-		params2 <= cmd_words(0);
-    end if;
-  end if;
-end process;
-------------------------------------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------------------------------------
-with cmd_words(1)(2 downto 0) select active_outs <=
-	0  when "000", 
-	1  when "001",
-	2  when "010",
-	4  when "011",
-	8  when "100",
-	12 when "101",
-	16 when "110",
-	max_sdo_lines when others; --nr SD Lines = 2x channels
-
+active_outs <= to_integer(unsigned(nr_outputs)) + 1 ;
 ------------------------------------------------------------------------------------------------------------
-process (ftdi_clk)
+process (usb_clk)
 begin
-  if rising_edge (ftdi_clk) then
-    if ftdi_reset = '1' or cmd_valid = '1' then
+  if rising_edge (usb_clk) then
+    if reset = '1' or cmd_valid = '1' then
       outs_counter <= 0;
-    elsif ftdi_state = fts_rd3 and rvalid = '1' and outs_counter < active_outs-1 then 
+    elsif ftdi_state = fts_rd3 and rvalid = '1' and outs_counter < active_outs-1 then
       outs_counter <= outs_counter+1;
     end if;
   end if;
 end process;
 ------------------------------------------------------------------------------------------------------------
-process (ftdi_clk)
+process (usb_clk)
 begin
-  if rising_edge (ftdi_clk) then
+  if rising_edge (usb_clk) then
     if final_rvalid = '0' then 
       if ftdi_state = fts_rd3 and rvalid = '1' then 
         final_rvalid <= '1';
@@ -257,36 +230,37 @@ begin
       end if;
     end if;
   end if;
-end process;    
+end process;
 ------------------------------------------------------------------------------------------------------------
-out_fifo_wr_en <= '1' when 
+out_fifo_wr <= '1' when 
   ftdi_state = fts_rd3 and
   (rvalid = '1' or final_rvalid = '1' ) and
   outs_counter = active_outs-1 and
-  out_fifo_wr_full = 0
+  out_fifo_full = '0'
   else '0';
 ------------------------------------------------------------------------------------------------------------
 rx_fifos : for i in 0 to max_sdo_lines-1 generate
 
-  process (ftdi_clk)
+  process (usb_clk)
   begin
-    if rising_edge(ftdi_clk) then
-      if i = outs_counter and rvalid = '1' then
+    if rising_edge(usb_clk) then
+      if reset = '1' then
+        out_fifo_wr_regs(i*2)     <= (others => '0');
+        out_fifo_wr_regs((i*2)+1) <= (others => '0');
+      elsif i = outs_counter and rvalid = '1' then
         case ftdi_state is
-        when fts_rd1 => out_fifo_wr_regs(i*2)(15 downto 0) <= ftdi_rd_data;
-        when fts_rd2 => out_fifo_wr_regs(i*2)(23 downto 16) <= ftdi_rd_data(7 downto 0);
-                        out_fifo_wr_regs((i*2)+1)(7 downto 0) <= ftdi_rd_data(15 downto 8);
-        when fts_rd3 => out_fifo_wr_regs((i*2)+1)(23 downto 8) <= ftdi_rd_data;
+        when fts_rd1 => out_fifo_wr_regs(i*2)(15 downto 0) <= rd_data;
+        when fts_rd2 => out_fifo_wr_regs(i*2)(23 downto 16) <= rd_data(7 downto 0);
+                        out_fifo_wr_regs((i*2)+1)(7 downto 0) <= rd_data(15 downto 8);
+        when fts_rd3 => out_fifo_wr_regs((i*2)+1)(23 downto 8) <= rd_data;
         when others =>
         end case;
       end if;
     end if;
   end process;
-  out_fifo_wr_data(i*2) <= out_fifo_wr_regs(i*2);--right channels
-  --left channels need to be muxed from the normal registers to the last read data only for the last channel
-  out_fifo_wr_data((i*2)+1) <= out_fifo_wr_regs((i*2)+1) when i /= active_outs-1 else
-                               ftdi_rd_data & out_fifo_wr_regs((i*2)+1)(7 downto 0);
-  
- end generate;
- 
- end behavioral;
+  out_fifo_data(i*2) <= out_fifo_wr_regs(i*2);--right channels
+  out_fifo_data((i*2)+1) <= out_fifo_wr_regs((i*2)+1);
+
+  end generate;
+
+end behavioral;

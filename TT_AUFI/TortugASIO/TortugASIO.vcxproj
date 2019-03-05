@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
@@ -22,34 +22,38 @@
     <ProjectGuid>{23E68BD6-2338-4647-B901-4157359E0E90}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>TortugASIO</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.15063.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
+    <UseOfMfc>Dynamic</UseOfMfc>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
+    <UseOfMfc>Dynamic</UseOfMfc>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
+    <UseOfMfc>Dynamic</UseOfMfc>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
+    <UseOfMfc>Dynamic</UseOfMfc>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -71,20 +75,22 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>.;..;..\..\asiosdk2.3\common;..\..\Win32xx 850\include;..\..\UsbDk-1.00-19\include;$(IncludePath)</IncludePath>
+    <IncludePath>.;..;..\..\asiosdk2.3\common;..\..\libs;$(IncludePath)</IncludePath>
+    <OutDir>$(SolutionDir)\Release\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>.;..;..\..\asiosdk2.3\common;..\..\Win32xx 850\include;..\..\UsbDk-1.00-19\include;$(IncludePath)</IncludePath>
+    <IncludePath>.;..;..\..\asiosdk2.3\common;..\..\libs;$(IncludePath)</IncludePath>
     <TargetName>$(ProjectName)x64</TargetName>
+    <OutDir>$(SolutionDir)$(Platform)\Release\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>.;..;..\..\asiosdk2.3\common;..\..\Win32xx 850\include;..\..\UsbDk-1.00-19\include;$(IncludePath)</IncludePath>
+    <IncludePath>.;..;..\..\asiosdk2.3\common;..\..\libs;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>.;..;..\..\asiosdk2.3\common;..\..\Win32xx 850\include;..\..\UsbDk-1.00-19\include;$(IncludePath)</IncludePath>
+    <IncludePath>.;..;..\..\asiosdk2.3\common;..\..\libs;$(IncludePath)</IncludePath>
     <TargetName>$(ProjectName)x64</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -98,10 +104,9 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>winmm.lib;%(AdditionalDependencies);</AdditionalDependencies>
-      <AdditionalLibraryDirectories>..\..\UsbDk-1.00-19;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>winmm.lib;mfcs140ud.lib;msvcrtd.lib;%(AdditionalDependencies);</AdditionalDependencies>
       <ModuleDefinitionFile>TortugASIO.def</ModuleDefinitionFile>
-      <IgnoreSpecificDefaultLibraries>LIBCMTD.lib</IgnoreSpecificDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>mfcs140ud.lib;msvcrtd.lib;</IgnoreSpecificDefaultLibraries>
     </Link>
     <ProjectReference />
   </ItemDefinitionGroup>
@@ -116,10 +121,9 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>..\..\UsbDk-1.00-19;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>winmm.lib;%(AdditionalDependencies);</AdditionalDependencies>
+      <AdditionalDependencies>winmm.lib;mfcs140ud.lib;msvcrtd.lib;%(AdditionalDependencies);</AdditionalDependencies>
       <ModuleDefinitionFile>TortugASIO.def</ModuleDefinitionFile>
-      <IgnoreSpecificDefaultLibraries>LIBCMTD.lib</IgnoreSpecificDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>mfcs140ud.lib;msvcrtd.lib;</IgnoreSpecificDefaultLibraries>
     </Link>
     <ProjectReference />
   </ItemDefinitionGroup>
@@ -138,10 +142,9 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>winmm.lib;%(AdditionalDependencies);</AdditionalDependencies>
-      <AdditionalLibraryDirectories>..\..\UsbDk-1.00-19;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>winmm.lib;mfcs140u.lib;msvcrt.lib;%(AdditionalDependencies);</AdditionalDependencies>
       <ModuleDefinitionFile>TortugASIO.def</ModuleDefinitionFile>
-      <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>mfcs140u.lib;msvcrt.lib;</IgnoreSpecificDefaultLibraries>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -159,23 +162,31 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalLibraryDirectories>..\..\UsbDk-1.00-19;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>winmm.lib;%(AdditionalDependencies);</AdditionalDependencies>
+      <AdditionalDependencies>winmm.lib;mfcs140u.lib;msvcrt.lib;%(AdditionalDependencies);</AdditionalDependencies>
       <ModuleDefinitionFile>TortugASIO.def</ModuleDefinitionFile>
-      <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>mfcs140u.lib;msvcrt.lib;</IgnoreSpecificDefaultLibraries>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\ASIOSDK2.3\common\asio.h" />
     <ClInclude Include="..\..\ASIOSDK2.3\common\asiosys.h" />
     <ClInclude Include="..\..\ASIOSDK2.3\common\combase.h" />
     <ClInclude Include="..\..\ASIOSDK2.3\common\iasiodrv.h" />
+    <ClInclude Include="..\..\libs\boost_1_68_0\boost\property_tree\detail\file_parser_error.hpp" />
+    <ClInclude Include="..\..\libs\boost_1_68_0\boost\property_tree\detail\ptree_utils.hpp" />
+    <ClInclude Include="..\..\libs\boost_1_68_0\boost\property_tree\ini_parser.hpp" />
+    <ClInclude Include="..\..\libs\boost_1_68_0\boost\property_tree\ptree.hpp" />
+    <ClInclude Include="..\..\libs\ntray\NTray.h" />
     <ClInclude Include="..\FX2LP\CypressDevice.h" />
     <ClInclude Include="..\UsbDev\UsbDev.h" />
     <ClInclude Include="..\UsbDK\UsbDKWrap.h" />
     <ClInclude Include="..\ZTEXDev\ztexdev.h" />
+    <ClInclude Include="ASIOSettings.h" />
+    <ClInclude Include="ASIOSettingsFile.h" />
+    <ClInclude Include="MainFrame.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="SettingsDlg.h" />
     <ClInclude Include="stdafx.h" />
@@ -201,15 +212,14 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="..\..\libs\ntray\NTray.cpp" />
     <ClCompile Include="..\UsbDev\UsbDev.cpp" />
     <ClCompile Include="..\UsbDK\UsbDKWrap.cpp" />
-    <ClCompile Include="..\ZTEXDev\ztexdev.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
+    <ClCompile Include="..\ZTEXDev\ztexdev.cpp" />
     <ClCompile Include="..\FX2LP\CypressDevice.cpp" />
+    <ClCompile Include="ASIOSettings.cpp" />
+    <ClCompile Include="ASIOSettingsFile.cpp" />
+    <ClCompile Include="MainFrame.cpp" />
     <ClCompile Include="Main.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>

@@ -32,28 +32,13 @@ use ieee.std_logic_unsigned.all;
 --library UNISIM;
 --use UNISIM.VComponents.all;
 
+use work.simtools.all;
+
 entity TopLevelSim is
 --  Port ( );
 end TopLevelSim;
 
 architecture Behavioral of TopLevelSim is
-
--- Procedure for clock generation
-  procedure clk_gen(signal clk : out std_logic; constant FREQ : real) is
-    constant PERIOD    : time := 1 sec / FREQ;        -- Full period
-    constant HIGH_TIME : time := PERIOD / 2;          -- High time
-    constant LOW_TIME  : time := PERIOD - HIGH_TIME;  -- Low time; always >= HIGH_TIME
-  begin
-    -- Check the arguments
-    assert (HIGH_TIME /= 0 fs) report "clk_plain: High time is zero; time resolution to large for frequency" severity FAILURE;
-    -- Generate a clock cycle
-    loop
-      clk <= '1';
-      wait for HIGH_TIME;
-      clk <= '0';
-      wait for LOW_TIME;
-    end loop;
-  end procedure;  
 
 constant nr_outputs: natural := 32;
 constant nr_inputs: natural := 32;
@@ -61,15 +46,13 @@ constant nr_inputs: natural := 32;
 constant dut_nr_outputs: natural := 32;
 constant dut_nr_inputs: natural := 32;
 
-constant payload_size : natural := (3*nr_outputs)+8;
+constant payload_size : natural := (3*nr_outputs)+4;
 type payload is array (0 to  payload_size-1) of std_logic_vector(7 downto 0);
 signal sd_out : std_logic_vector(dut_nr_outputs/2 -1  downto 0);
 
 constant test_data: payload := 
 ( X"AA", X"55",
-  X"36", X"85",  -- 32ins/32outs
-  X"0D", X"55",  -- 85 samples / 13 words padding
-  X"FF", X"00",
+  X"55", X"AA",
    X"A0", X"B0", X"C0" --ch01 
   ,X"A1", X"B1", X"C1" --ch02
   ,X"A2", X"B2", X"C2" --ch03
@@ -101,8 +84,7 @@ constant test_data: payload :=
   ,X"DC", X"EC", X"FC" --ch29
   ,X"DD", X"ED", X"FD" --ch30
   ,X"DE", X"EE", X"FE" --ch31
-  ,X"DF", X"EF", X"FF" --ch32    
-
+  ,X"DF", X"EF", X"FF" --ch32
 );
 
  
@@ -119,6 +101,7 @@ signal ft_send : std_logic_vector(15 downto 0);
 signal ft_nwr     : std_logic;
 signal ft_ntxe    : std_logic;
 
+signal flagb      : std_logic;
 
 signal yamaha_clk: std_logic;
 signal yamaha_word_clk: std_logic;
@@ -135,7 +118,7 @@ clk_gen(yamaha_clk, 24_576_000.0 ); --96 khz
 process
 begin 
 	reset <= '1';
-	wait for 100ns;
+	wait for 100 ns;
 	reset <= '0';
 	wait;
 end process;
@@ -212,9 +195,10 @@ begin
   nr_writes <= counter;
 end process;
 
+flagb <= not ft_ntxe;
 
 inst: entity work.CY16_to_iis
-generic map( sdi_lines => dut_nr_inputs/2, sdo_lines => dut_nr_outputs/2 , bit_depth => 24 )
+generic map( sdi_lines => dut_nr_inputs/2, sdo_lines => dut_nr_outputs/2 )--, bit_depth => 24 )
 port map(
 
     led(7 downto 0) => led(7 downto 0),
@@ -228,17 +212,21 @@ port map(
     dio    => ft_DATA,
 
     FLAGA => '1', -- repeat the message
-    FLAGB => not ft_ntxe,
+    FLAGB => flagb,
     
     SLRD  => ft_nRD,
     SLOE  => ft_nOE,
     SLWR   => ft_nwr,    
         
-    sd_in => sd_out, --loopback    
-    sd_out => sd_out,
+    ain => sd_out(11 downto 0), --loopback    
+    aout => sd_out(11 downto 0),
     
     ymh_clk => yamaha_clk,
-    sd_word_clk => yamaha_word_clk
+    ymh_word_clk => yamaha_word_clk,
+	 
+	 lsi_clk => '0',
+	 lsi_mosi => '0',
+	 lsi_stop => '0'
     );
 
 

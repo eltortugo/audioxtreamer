@@ -5,13 +5,17 @@
 #pragma once
 
 #include "UsbDev\UsbDev.h"
+#include "resource.h"
+#include "wxx_dialog.h"
+
+
 // CAudioXtreamerDlg dialog
 class CypressDevice;
-class CAudioXtreamerDlg : public CDialogEx, public UsbDeviceClient
+class CAudioXtreamerDlg : public CDialog, public UsbDeviceClient
 {
 // Construction
 public:
-	CAudioXtreamerDlg(CWnd* pParent = NULL);	// standard constructor
+	CAudioXtreamerDlg(); // standard constructor
   ~CAudioXtreamerDlg();
 
   void Switch(uint32_t rxSampleSize, uint8_t *rxBuff, uint32_t txSampleSize, uint8_t *txBuff) override;
@@ -22,8 +26,9 @@ public:
 #endif
 
 	protected:
-	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV support
-
+	virtual void DoDataExchange(CDataExchange &DX);	// DDX/DDV support
+  INT_PTR DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam) override;
+  virtual BOOL OnCommand(WPARAM wParam, LPARAM lParam);
 
 // Implementation
 protected:
@@ -31,21 +36,21 @@ protected:
 
   UsbDevice * mDevice;
 
-	// Generated message map functions
+
 	virtual BOOL OnInitDialog();
-	afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
-	afx_msg void OnPaint();
-	afx_msg HCURSOR OnQueryDragIcon();
-	DECLARE_MESSAGE_MAP()
+
+  LRESULT OnPaint(UINT uMsg, WPARAM wParam, LPARAM lParam) override;
+	HCURSOR OnQueryDragIcon();
+
 public:
-  afx_msg void OnBnClickedCheck1();
+  void OnBnClickedCheck1();
 protected:
   BOOL mCheckOpenDevice;
 public:
-  afx_msg void OnOpen();
-  afx_msg void OnClose();
-  afx_msg void OnSendAsync();
-  afx_msg void OnRecvAsync();
-  afx_msg void OnStartStream();
-  afx_msg void OnStopStream();
+  void OnOpen();
+  void OnClose();
+  void OnSendAsync();
+  void OnRecvAsync();
+  void OnStartStream();
+  void OnStopStream();
 };

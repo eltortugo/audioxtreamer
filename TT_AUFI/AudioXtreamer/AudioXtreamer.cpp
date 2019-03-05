@@ -10,45 +10,44 @@
 #define new DEBUG_NEW
 #endif
 
+int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
+{
+  try
+  {
+    // Start Win32++
+    CAudioXtreamerApp theApp;
 
-// CAudioXtreamerApp
+    // Run the modal application returning true to the caller because the initinstance will return false
+    theApp.Run();
+    return 0;
+  }
 
-BEGIN_MESSAGE_MAP(CAudioXtreamerApp, CWinApp)
-	ON_COMMAND(ID_HELP, &CWinApp::OnHelp)
-END_MESSAGE_MAP()
+  // catch all unhandled CException types
+  catch (const CException &e)
+  {
+    // Display the exception and quit
+    MessageBox(NULL, e.GetText(), AtoT(e.what()), MB_ICONERROR);
 
+    return -1;
+  }
+}
 
 // CAudioXtreamerApp construction
 
 CAudioXtreamerApp::CAudioXtreamerApp()
 {
 	// support Restart Manager
-	m_dwRestartManagerSupportFlags = AFX_RESTART_MANAGER_SUPPORT_RESTART;
+	//m_dwRestartManagerSupportFlags = AFX_RESTART_MANAGER_SUPPORT_RESTART;
 
 	// TODO: add construction code here,
 	// Place all significant initialization in InitInstance
 }
 
 
-// The one and only CAudioXtreamerApp object
-
-CAudioXtreamerApp theApp;
-
-
 // CAudioXtreamerApp initialization
 
 BOOL CAudioXtreamerApp::InitInstance()
 {
-	// InitCommonControlsEx() is required on Windows XP if an application
-	// manifest specifies use of ComCtl32.dll version 6 or later to enable
-	// visual styles.  Otherwise, any window creation will fail.
-	INITCOMMONCONTROLSEX InitCtrls;
-	InitCtrls.dwSize = sizeof(InitCtrls);
-	// Set this to include all the common control classes you want to use
-	// in your application.
-	InitCtrls.dwICC = ICC_WIN95_CLASSES;
-	InitCommonControlsEx(&InitCtrls);
-
 	CWinApp::InitInstance();
 
 
@@ -60,11 +59,11 @@ BOOL CAudioXtreamerApp::InitInstance()
 	// Change the registry key under which our settings are stored
 	// TODO: You should modify this string to be something appropriate
 	// such as the name of your company or organization
-	SetRegistryKey(_T("Local AppWizard-Generated Applications"));
+	//SetRegistryKey(_T("Local AppWizard-Generated Applications"));
 
 	CAudioXtreamerDlg dlg;
-	m_pMainWnd = &dlg;
-	INT_PTR nResponse = dlg.DoModal();
+	
+	INT_PTR nResponse = dlg.DoModal(0);
 	if (nResponse == IDOK)
 	{
 		// TODO: Place code here to handle when the dialog is
@@ -77,12 +76,12 @@ BOOL CAudioXtreamerApp::InitInstance()
 	}
 	else if (nResponse == -1)
 	{
-		TRACE(traceAppMsg, 0, "Warning: dialog creation failed, so application is terminating unexpectedly.\n");
+		TRACE("Warning: dialog creation failed, so application is terminating unexpectedly.\n");
 	}
 
 
-	// Since the dialog has been closed, return FALSE so that we exit the
-	//  application, rather than start the application's message pump.
-	return FALSE;
+	//returning true must start the message pump and we need to be sure a close message is sent to kill the app
+  ::PostQuitMessage(0);
+	return TRUE; 
 }
 

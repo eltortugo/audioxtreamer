@@ -5,7 +5,8 @@
 #include <stdint.h>
 
 #include "UsbDev\UsbDev.h"
-
+class ASIOSettingsDlg;
+class ASIOSettingsFile;
 class TortugASIO : public IASIO, public CUnknown, public UsbDeviceClient
 {
 
@@ -48,8 +49,7 @@ public:
   ASIOError outputReady();
 
   void Switch(uint32_t rxSampleSize, uint8_t *rxBuff, uint32_t txSampleSize, uint8_t *txBuff) override;
-
-  bool dlgActive;
+  bool GetDeviceStatus(UsbDeviceStatus &var) override;
 
   double samplePosition;
   double sampleRate;
@@ -61,7 +61,7 @@ public:
   //This is internal channel data buffer. number of Outputs.
   uint8_t	mNumInputs;
   uint8_t	mNumOutputs;
-  uint16_t mNumSamples;
+  int &mNumSamples;
   uint8_t **OutputBuffers;
   uint8_t **InputBuffers;
 
@@ -82,6 +82,8 @@ public:
   volatile bool bufferActive;
 
   UsbDevice * mDevice;
+  ASIOSettingsDlg * mSettingsDlg;
+  ASIOSettingsFile * mIniFile;
   HANDLE hSem;
 
 };

@@ -15,9 +15,20 @@ Steinberg Audio Stream I/O API
 //Threading
 #include <process.h>
 #include "SettingsDlg.h"
-#include "TaskLock.h"
+#include "timeapi.h"
+
+#include "ASIOSettingsFile.h"
+#include "ASIOSettings.h"
+
+using namespace ASIOSettings;
+
+
+
 
 #define DEFAULT_SAMPLING_RATE 48000
+#define NR_INS 32
+#define NR_OUTS 32
+#define NR_SAMPLES 64
 
 
 
@@ -41,16 +52,14 @@ double AsioSamples2double(ASIOSamples* samples)
 
 // class id
 // {25CBA31C - 951A - 48C6 - B513 - 012E1E2D09D8}
-
-#ifdef _WIN64 
-CLSID IID_ASIO_DRIVER = { 0x25CBA31C, 0x951A, 0x48C6,{ 0xB5, 0x13, 0x01, 0x2E, 0x1E, 0x2D, 0x09, 0xD9 } };
+CLSID IID_ASIO_DRIVER = { 0x25CBA31C, 0x951A, 0x48C6,{ 0xB5, 0x13, 0x01, 0x2E, 0x1E, 0x2D, 0x09, 0xD8 } };
+#ifdef _WIN64
 const TCHAR * dllName = _T("TortugASIOx64.dll");
 const TCHAR * regKey = _T("TortugASIO x64 Driver");
 const TCHAR * driverName = _T("TortugASIO USB FT2FPGA x64");
 const wchar_t *className = L"TORTUGASIO64";
 const TCHAR * ifaceName = _T("TortugASIOx64");
-#else // !_WIN64 
-CLSID IID_ASIO_DRIVER    = { 0x25CBA31C, 0x951A, 0x48C6,{ 0xB5, 0x13, 0x01, 0x2E, 0x1E, 0x2D, 0x09, 0xD8 } };
+#else // !_WIN64
 const TCHAR * dllName    = _T("TortugASIO.dll");
 const TCHAR * regKey   = _T("TortugASIO Driver");
 const TCHAR * driverName = _T("TortugASIO USB FT2FPGA");
@@ -167,8 +176,8 @@ void TortugASIO::Switch(uint32_t rxStride, uint8_t *rxBuff, uint32_t txStride, u
       getNanoSeconds(&theSystemTime);			// latch system time
       samplePosition += blockFrames;
 
-      callbacks->bufferSwitch(buffIdx, ASIOFalse);
-      //client reads the input data and fills the ouput data
+      callbacks->bufferSwitch(buffIdx, ASIOTrue);
+      //client reads the input data and fills the ouput data, no waiting allowed thus ASIOTrue
     }
 
     if (WaitForSingleObject(hSem, 0) == WAIT_OBJECT_0)
@@ -194,18 +203,29 @@ void TortugASIO::Switch(uint32_t rxStride, uint8_t *rxBuff, uint32_t txStride, u
     buffIdx ^= 1;
 }
 
+//------------------------------------------------------------------------------------------
+
+bool TortugASIO::GetDeviceStatus(UsbDeviceStatus &var)
+{  
+  return nullptr != mDevice && mDevice->GetStatus(var);
+}
 
 //------------------------------------------------------------------------------------------
+
+ASIOSettings::Settings gSettings =
+{
+  { 15, 15, 15,_T("NrIns"),     _T("; zero index based number of pcm LR lines")},
+  { 15, 15, 15,_T("NrOuts"),    _T("; zero index based number of pcm LR lines")},
+  { 64, 64, 256,_T("NrSamples"), _T("; Whats necesary to run smooth and the least 512b usb packets")},
+  { 64, 64, 256,_T("FifoSize"),  _T("; Size of the hardware Out FIFO , multiple of 16")}
+};
+
 //------------------------------------------------------------------------------------------
 TortugASIO::TortugASIO(LPUNKNOWN pUnk, HRESULT *phr)
-: CUnknown(ifaceName, pUnk, phr),
-mNumSamples(16),
-mNumInputs(32),
-mNumOutputs(32)
+: CUnknown(ifaceName, pUnk, phr)
+, mNumSamples(gSettings[NrSamples].val)
 {
   LOG0("TortugASIO::TortugASIO");
-
-  blockFrames = mNumSamples;
 
   // typically blockFrames * 2; try to get 1 by offering direct buffer
   // access, and using asioPostOutput for lower latency
@@ -225,19 +245,38 @@ mNumOutputs(32)
   callbacks = 0;
   activeInputs = activeOutputs = 0;
   buffIdx = 0;
-  dlgActive = false;
+
   mDevice = nullptr;
   hSem = CreateSemaphore(
     NULL,           // default security attributes
     1,  // initial count
     1,  // maximum count
     NULL);
+
+  mSettingsDlg = nullptr;
+  mIniFile = new ASIOSettingsFile(gSettings);
+  if (mIniFile) {
+    mIniFile->Open();
+    mNumInputs = (gSettings[NrIns].val+1)*2;
+    mNumOutputs = (gSettings[NrOuts].val+1)*2;
+  }
+
+  blockFrames = mNumSamples;
 }
 
 //------------------------------------------------------------------------------------------
 TortugASIO::~TortugASIO()
 {
   LOG0("TortugASIO::~TortugASIO");
+
+  if (mSettingsDlg != nullptr)
+  {
+    mSettingsDlg->EndModalLoop(IDCANCEL);
+    mSettingsDlg->DestroyWindow();
+    delete mSettingsDlg;
+    mSettingsDlg = nullptr;
+  }
+
   if(started)
     stop();
   if (mDevice)
@@ -249,6 +288,9 @@ TortugASIO::~TortugASIO()
 
   disposeBuffers();
   CloseHandle(hSem);
+
+  delete mIniFile;
+  mIniFile = nullptr;
 }
 
 //------------------------------------------------------------------------------------------
@@ -279,19 +321,17 @@ ASIOBool TortugASIO::init(void* sysRef)
 {
   LOG0("TortugASIO::init");
   bufferActive = false;
-  dlgActive = false;
 
   if (active)
     return true;
   strcpy(errorMessage, "ASIO Driver open Failure!");
 
-  mDevice = UsbDevice::CreateDevice(*this, mNumInputs, mNumOutputs, mNumSamples);
+  mDevice = UsbDevice::CreateDevice( UsbDevice::UsbDevFX2LP, *this, gSettings);
 
   if (mDevice->Open()) {
     active = true;
     return true;
   }
-
 
   delete mDevice;
   mDevice = nullptr;
@@ -323,7 +363,7 @@ ASIOError TortugASIO::start()
 ASIOError TortugASIO::stop()
 {
   LOG0("TortugASIO::stop");
-  if (mDevice->Stop(false)) {
+  if (mDevice && mDevice->Stop(false)) {
     started = false;
     return ASE_OK;
   }
@@ -344,12 +384,9 @@ ASIOError TortugASIO::getChannels(long *numInputChannels, long *numOutputChannel
 //------------------------------------------------------------------------------------------
 ASIOError TortugASIO::getLatencies(long *_inputLatency, long *_outputLatency)
 {
-  LOG0("TortugASIO::getLatencies");
-  if ( mDevice == nullptr)
-    return ASE_NotPresent;
-
   *_inputLatency = blockFrames;		// typically;
-  *_outputLatency = blockFrames * 2 + mDevice->GetFifoSize();
+  *_outputLatency = blockFrames + gSettings[FifoDepth].val;
+  LOGN("TortugASIO::getLatencies %ld:%ld", *_inputLatency, *_outputLatency);
 
   return ASE_OK;
 }
@@ -511,7 +548,7 @@ ASIOError TortugASIO::createBuffers(ASIOBufferInfo *bufferInfos, long numChannel
       }
     }else
     {
-      if (info->channelNum >= 0 && info->channelNum < mNumInputs) {
+      if (info->channelNum >= 0 && info->channelNum < mNumOutputs) {
         info->buffers[0] = OutputBuffers[info->channelNum];
         info->buffers[1] = OutputBuffers[info->channelNum] + blockFrames * 3;
         outMap[activeOutputs] = info->channelNum;
@@ -550,13 +587,6 @@ ASIOError TortugASIO::disposeBuffers()
   LOG0("TortugASIO::disposeBuffers");
   long i;
 
-  if (started)
-  {
-    DebugBreak();
-    return ASE_InvalidMode;
-  }
-
-
   if (bufferActive)
   {
     if (WaitForSingleObject(hSem, INFINITE) == WAIT_OBJECT_0) {
@@ -581,35 +611,35 @@ ASIOError TortugASIO::disposeBuffers()
       inMap = nullptr;
 
       bufferActive = false;
+      callbacks = 0;
+      activeOutputs = 0;
+      activeInputs = 0;
       ReleaseSemaphore(hSem, 1, NULL);
     }
   }
-
-  callbacks = 0;
-  activeOutputs = 0;
-  activeInputs = 0;
+ 
   return ASE_OK;
 }
 
 //---------------------------------------------------------------------------------------------
 ASIOError TortugASIO::controlPanel()
 {
+  //MessageBox(0, _T("32ch+32ch@48Khz"), _T("TortugASIO"), MB_TASKMODAL | MB_ICONINFORMATION);
+  AFX_MANAGE_STATE(AfxGetStaticModuleState());
+  ASIOSettingsDlg dlg(*mDevice, gSettings);
+  if (dlg.DoModal() == IDOK)
+  {
+    mNumInputs = (gSettings[NrIns].val+1)*2;
+    mNumOutputs = (gSettings[NrOuts].val+1)*2;
+    blockFrames = mNumSamples;
+    if(mIniFile) 
+      mIniFile->Save();
 
-   if (!dlgActive) {
-     dlgActive = true;
-     CWinApp app;
-     ASIOSettingsDlg dlg;
-     dlg.DoModal();
+    if (callbacks && callbacks->asioMessage)
+      callbacks->asioMessage(kAsioResetRequest, 0, 0, 0);
+  }
 
-     dlgActive = false;
-
-     return ASE_OK;
-   }
-   else {
-
-     return ASE_NotPresent;
-   }
-  
+  return ASE_OK;
 }
 
 //---------------------------------------------------------------------------------------------

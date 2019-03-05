@@ -23,9 +23,11 @@ entity fifo_to_m_axis is
     m_axis_tready: in std_logic;
     m_axis_tdata : out STD_LOGIC_VECTOR(15 downto 0);
 
+    nr_inputs: in std_logic_vector(3 downto 0);
+    nr_padding: in slv_8;
+    nr_samples: in slv_8;
+    tx_enable : in std_logic;
 
-    params1 : slv_16;
-	 params2 : slv_16;
     status_1 : in slv_8;
     status_2 : in slv_8;
     in_fifo_empty: in std_logic;
@@ -48,7 +50,7 @@ architecture Behavioral of fifo_to_m_axis is
   signal word_counter : natural range 0 to header_size + max_padding + 3*max_sdi_lines*max_samples ;
   signal nr_ins : natural range 0 to max_sdi_lines;
   signal padding: natural range 0 to max_padding;
-  signal nr_samples: natural range 0 to max_samples;
+  signal samples_pp: natural range 0 to max_samples;
   signal in_fifo_index: natural range 0 to (max_sdi_lines*2)-1;
   signal fifo_rd   : std_logic;
   ------------------------------------------------------------------------------------------------------------
@@ -63,20 +65,9 @@ architecture Behavioral of fifo_to_m_axis is
   ------------------------------------------------------------------------------------------------------------
 begin
 
-  with params1(5 downto 3) select nr_ins <=
-    0  when "000", 
-    1  when "001",
-    2  when "010",
-    4  when "011",
-    8  when "100",
-    12 when "101",
-    16 when "110",
-    max_sdi_lines when others; --nr SD Lines = 2x channels
- 
-
-  nr_samples <= to_integer(unsigned(params2(15 downto 8)));
-  padding <= to_integer(unsigned(params2(7 downto 0)));
-
+  nr_ins <= to_integer(unsigned(nr_inputs)) + 1;
+  samples_pp <= to_integer(unsigned(nr_samples));
+  padding <= to_integer(unsigned(nr_padding));
 
   tx_fsm: process (clk)
   begin
@@ -87,7 +78,7 @@ begin
       else
         case tx_state is
           when txst_idle => 
-            if in_fifo_empty = '0' then
+            if tx_enable = '1' and samples_pp /= 0 and in_fifo_empty = '0' then
               tx_state <= txst_header;
               fifo_rd <= '1';
             end if;
@@ -98,7 +89,7 @@ begin
             end if;
           when txst_data =>
             fifo_rd <= '0';
-            if word_counter =  (nr_samples*nr_ins*3) -1  and m_axis_tready = '1' then
+            if word_counter =  (samples_pp*nr_ins*3) -1  and m_axis_tready = '1' then
               if nr_ins /= 0 and in_fifo_empty = '0' then 
                 tx_state <= txst_header;
                 fifo_rd <= '1';
@@ -127,7 +118,7 @@ begin
             m_axis_tvalid <= '1';
           when txst_data =>
             if (in_fifo_index/2 = nr_ins-1 and (word_counter mod 3) = 2) then
-              if word_counter < nr_samples*nr_ins*3 - 1 then
+              if word_counter < samples_pp*nr_ins*3 - 1 then
                 m_axis_tvalid <= not in_fifo_empty;
               end if;
             else
@@ -164,7 +155,7 @@ begin
             end if;
           when txst_data =>
             if m_axis_tready = '1' then
-              if word_counter < nr_samples*nr_ins*3 - 1 then
+              if word_counter < samples_pp*nr_ins*3 - 1 then
                  -- the sample is finished and we need to fetch a new sample from the fifo
                 if not (in_fifo_index/2 = nr_ins-1 and (word_counter mod 3) = 2) or in_fifo_empty = '0' then
                   word_counter <= word_counter +1;
@@ -180,12 +171,10 @@ begin
   end process;
   ------------------------------------------------------------------------------------------------------------
   tx_data_reg : process (clk)
-    variable packetNr : slv_8 := X"00";
   begin
     if rising_edge(clk) then
       if reset = '1' then 
         m_axis_tdata <= X"CDCD";
-        packetNr := X"00";
       elsif tx_state /= txst_idle and m_axis_tready = '1' then
         if tx_state = txst_header then
           case word_counter is
@@ -194,8 +183,7 @@ begin
               m_axis_tdata <= header(word_counter);
             when 1 =>
               m_axis_tdata <= status_2 & status_1;
-              packetNr := packetNr + 1;
-            when others =>
+             when others =>
               m_axis_tdata <= X"CDCD";
           end case;
         elsif tx_state = txst_data then

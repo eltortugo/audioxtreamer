@@ -6,7 +6,7 @@
 class CypressDevice : public UsbDevice
 {
 public:
-  explicit CypressDevice(UsbDeviceClient & client, uint32_t NrOuts, uint32_t NrIns, uint32_t NrSamples);
+  explicit CypressDevice(UsbDeviceClient & client, ASIOSettings::Settings & params);
   ~CypressDevice();
 
   bool Open() override;
@@ -20,6 +20,7 @@ public:
   bool RecvAsync(unsigned int size, unsigned int timeout);
 
   uint32_t GetReframes() { return mReframes; }
+  bool GetStatus(UsbDeviceStatus &param) override;
 
 private:
 
@@ -35,14 +36,13 @@ private:
   }
 
   UsbDeviceClient & devClient;
-
-  const uint32_t mNrIns;
-  const uint32_t mNrOuts;
-  const uint32_t mNrSamples;
+  ASIOSettings::Settings & devParams;
 
   uint32_t mReframes;
   uint8_t mDefOutEP;
   uint8_t mDefInEP;
 
   HANDLE mDevHandle;
+  HANDLE hSem;
+  UsbDeviceStatus mDevStatus;
 };
