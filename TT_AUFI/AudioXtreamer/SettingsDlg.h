@@ -3,8 +3,8 @@
 #include "..\UsbDev\UsbDev.h"
 #include "ASIOSettings.h"
 
-class ASIOSettingsDlg :
-  public CDialog
+template <class T>
+class ASIOSettingsDlg :  public T
 {
 public:
 #ifdef AFX_DESIGN_TIME
@@ -24,17 +24,28 @@ public:
 private:
   uint16_t mSRvals[16];
   uint32_t mSRacc;
-  uint8_t mSRidx;
- 
+  uint32_t mSRLast;
+  uint8_t mSRidx; 
 
 protected:
   DECLARE_MESSAGE_MAP()
+  afx_msg void OnHScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar);
+  afx_msg void OnShowWindow( BOOL bShow, UINT nStatus );
+
+  typedef enum { SCSamples, SCFifo, SCBoth } SCType;
+  void UpdateRanges(SCType type);
 public:
   virtual BOOL OnInitDialog();
   virtual void DoDataExchange(CDataExchange* pDX);
+
   CComboBox mListIns;
   CComboBox mListOuts;
-  CComboBox mListNrSamples;
-  CComboBox mListFifoDepth;
+
+  CSliderCtrl mSliderSamples;
+  CSliderCtrl mSliderFifo;
+private:
+  CProgressCtrl mProgressFifo;
 };
+
+#include "SettingsDlg.cpp"
 

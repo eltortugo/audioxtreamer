@@ -11,25 +11,20 @@
 #define _CRT_SECURE_NO_WARNINGS
 #define VC_EXTRALEAN //Exclude rarely-used stuff from Windows headers
 
-#if 0
+
 #include "Winsock2.h"
 #include <Windows.h>
-#else
-#include <afxwin.h>         // MFC core and standard components
-#include <afxext.h>         // MFC extensions
-#include <afxmt.h>          // MFC multithreading support
 
-#include <atlbase.h>        // ATL support
-extern ATL::CComModule _Module;
-#include <atlwin.h>
+#include <crtdbg.h>
+#define ASSERT(x) _ASSERT(x)
 
-#endif
+#include <tchar.h>
+
 #include <stdint.h>
-
 #include <cfgmgr32.h>
 #include <usb.h>
 
-#include <crtdbg.h>
+
 
 #define LOG0(x) _RPT0(_CRT_WARN, x##"\n")
 #define LOGN(x, ...) _RPTN(_CRT_WARN, x, __VA_ARGS__ )

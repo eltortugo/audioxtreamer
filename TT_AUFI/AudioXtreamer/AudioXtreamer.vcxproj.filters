@@ -21,6 +21,15 @@
     <Filter Include="Source Files\UsbDK">
       <UniqueIdentifier>{b406dc6f-17f1-470c-8292-7802db522f29}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\libs">
+      <UniqueIdentifier>{3bef1916-7fa9-4064-b342-b57493405c74}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libs\NTray">
+      <UniqueIdentifier>{ed18c900-33b5-4faf-a90b-a2afe72a9797}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libs\Simpleini">
+      <UniqueIdentifier>{a262fe11-44f7-4e5e-8917-51debf88b4d3}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Text Include="ReadMe.txt" />
@@ -53,12 +62,33 @@
     <ClInclude Include="targetver.h">
       <Filter>Resource Files</Filter>
     </ClInclude>
+    <ClInclude Include="ASIOSettings.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ASIOSettingsFile.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\libs\ntray\NTray.h">
+      <Filter>Source Files\libs\NTray</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\libs\simpleini\SimpleIni.h">
+      <Filter>Source Files\libs\Simpleini</Filter>
+    </ClInclude>
+    <ClInclude Include="MainFrame.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SettingsDlg.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="AudioXtreamerDlg.cpp">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SettingsDlg.cpp">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AudioXtreamer.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="AudioXtreamerDlg.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="stdafx.cpp">
@@ -76,6 +106,18 @@
     <ClCompile Include="..\FX2LP\CypressDevice.cpp">
       <Filter>Source Files\FX2LP</Filter>
     </ClCompile>
+    <ClCompile Include="ASIOSettings.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ASIOSettingsFile.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\libs\ntray\NTray.cpp">
+      <Filter>Source Files\libs\NTray</Filter>
+    </ClCompile>
+    <ClCompile Include="MainFrame.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="AudioXtreamer.rc">
@@ -86,9 +128,18 @@
     <None Include="res\AudioXtreamer.rc2">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="..\..\FPGA\ZTEX201\USB32chAudio\cy16_to_iis.bin">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\AudioXtreamer.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\AudioXtreamerR.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\AudioXtreamerY.ico">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

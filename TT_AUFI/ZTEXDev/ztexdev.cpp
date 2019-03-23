@@ -102,7 +102,7 @@ buf__[0]=0;
 int ztex_get_device_info(HANDLE handle, ztex_device_info *info) {
 
   unsigned char *buf = info->product_string; // product string is used as buffer
-  int status;
+  int64_t status;
 
   // VR 0x33: fast configuration info
   TWO_TRIES(status, control_transfer(handle, 0xc0, 0x33, 0, 0, buf, 128, 1500));
@@ -188,9 +188,9 @@ int ztex_get_device_info(HANDLE handle, ztex_device_info *info) {
 */
 int ztex_get_fpga_config(HANDLE handle) {
   unsigned char buf[16];
-  int status;
+  int64_t status;
   TWO_TRIES(status, control_transfer(handle, 0xc0, 0x30, 0, 0, buf, 16, 1500));
-  return status < 0 ? status : status == 0 ? -255 : buf[0] == 0 ? 1 : 0;
+  return status < 0 ? (int)status : status == 0 ? -255 : buf[0] == 0 ? 1 : 0;
 }
 
 #if defined(unix) || defined(_unix)
@@ -238,7 +238,7 @@ char* ztex_find_bitstream(const ztex_device_info *info, const char *path, const 
 * @param bs 0: disable bit swapping, 1: enable bit swapping, all other values: automatic detection of bit order.
 * @return -1 if an error occurred, otherwise 0. Error messages are printed to sbuf.
 */
-int ztex_upload_bitstream(HANDLE handle, const ztex_device_info *info, FILE *fd, int bs) {
+/*int ztex_upload_bitstream(HANDLE handle, const ztex_device_info *info, FILE *fd, int bs) {
 #define EP0_TRANSACTION_SIZE 2048
 #define BUF_SIZE 32768
 #define BUFS_SIZE 2048
@@ -317,11 +317,11 @@ int ztex_upload_bitstream(HANDLE handle, const ztex_device_info *info, FILE *fd,
     }
 
     // reset FPGA
-    TWO_TRIES(status, control_transfer(handle, 0x40, 0x31, 0, 0, NULL, 0, 1500));
+    TWO_TRIES(status, (int)control_transfer(handle, 0x40, 0x31, 0, 0, NULL, 0, 1500));
 
     // init FPGA configuration
     if (ep>0) {
-      TWO_TRIES(status, control_transfer(handle, 0x40, 0x34, 0, 0, NULL, 0, 1500));
+      TWO_TRIES(status, (int)control_transfer(handle, 0x40, 0x34, 0, 0, NULL, 0, 1500));
       if (status < 0) {
         break;
       }
@@ -335,7 +335,7 @@ int ztex_upload_bitstream(HANDLE handle, const ztex_device_info *info, FILE *fd,
       buf = bufs[i];
       if (ep>0) {
         while ((status >= 0) && (j > 0)) {
-          TWO_TRIES(status, bulk_transfer(handle, ep, buf, j, &k, nullptr, 2000));
+          TWO_TRIES(status, (int)bulk_transfer(handle, ep, buf, j, &k, nullptr, 2000));
           if (status<0) {
           }
           else if (k<1) {
@@ -350,7 +350,7 @@ int ztex_upload_bitstream(HANDLE handle, const ztex_device_info *info, FILE *fd,
       else {
         for (int k = 0; (status >= 0) && (k<j); k += EP0_TRANSACTION_SIZE) {
           int l = j - k < EP0_TRANSACTION_SIZE ? j - k : EP0_TRANSACTION_SIZE;
-          TWO_TRIES(status, control_transfer(handle, 0x40, 0x32, 0, 0, buf + k, l, 1500));
+          TWO_TRIES(status, (int)control_transfer(handle, 0x40, 0x32, 0, 0, buf + k, l, 1500));
           if (status<0) {
           }
           else if (status != l) {
@@ -362,7 +362,7 @@ int ztex_upload_bitstream(HANDLE handle, const ztex_device_info *info, FILE *fd,
 
     // finish FPGA configuration
     if (ep>0) {
-      TWO_TRIES(status, control_transfer(handle, 0x40, 0x35, 0, 0, NULL, 0, 1500));
+      TWO_TRIES(status, (int)control_transfer(handle, 0x40, 0x35, 0, 0, NULL, 0, 1500));
     }
 
     // check configuration state
@@ -388,7 +388,7 @@ int ztex_upload_bitstream(HANDLE handle, const ztex_device_info *info, FILE *fd,
   }
 
   return status;
-}
+}*/
 
 
 // ******* ztex_default_gpio_ctl ***********************************************
@@ -402,7 +402,7 @@ int ztex_upload_bitstream(HANDLE handle, const ztex_device_info *info, FILE *fd,
 int ztex_default_gpio_ctl(HANDLE handle, int mask, int value) {
   unsigned char buf[8];
   int status;
-  TWO_TRIES(status, control_transfer(handle, 0xc0, 0x61, value, mask, buf, 8, 1500));
+  TWO_TRIES(status, (int)control_transfer(handle, 0xc0, 0x61, value, mask, buf, 8, 1500));
   return status < 0 ? status : buf[0];
 }
 
@@ -415,14 +415,14 @@ int ztex_default_gpio_ctl(HANDLE handle, int mask, int value) {
 */
 int ztex_default_reset(HANDLE handle, int leave) {
   int status;
-  TWO_TRIES(status, control_transfer(handle, 0x40, 0x60, leave ? 1 : 0, 0, NULL, 0, 1500));
+  TWO_TRIES(status, (int)control_transfer(handle, 0x40, 0x60, leave ? 1 : 0, 0, NULL, 0, 1500));
   return status;
 }
 
 
 int ztex_xlabs_init_fifos(HANDLE handle) {
   int status;
-  TWO_TRIES( status, control_transfer(handle, 0x40, 0x70, 0, 0, NULL, 0, 1500));
+  TWO_TRIES( status, (int)control_transfer(handle, 0x40, 0x70, 0, 0, NULL, 0, 1500));
   return status;
 }
 
@@ -440,7 +440,7 @@ int ztex_xlabs_init_fifos(HANDLE handle) {
 int ztex_default_lsi_set1(HANDLE handle, uint8_t addr, uint32_t val) {
   uint8_t buf[] = { (uint8_t)(val), (uint8_t)(val >> 8), (uint8_t)(val >> 16), (uint8_t)(val >> 24), addr };
   int status;
-  TWO_TRIES(status, control_transfer(handle, 0x40, 0x62, 0, 0, buf, 5, 1500));
+  TWO_TRIES(status, (int)control_transfer(handle, 0x40, 0x62, 0, 0, buf, 5, 1500));
   return status;
 }
 
@@ -469,7 +469,7 @@ int ztex_default_lsi_set2(HANDLE handle, uint8_t addr, const uint32_t *val, int 
     buf[(i - ia) * 5 + 4] = addr + i;
   }
   int status;
-  TWO_TRIES(status, control_transfer(handle, 0x40, 0x62, 0, 0, buf, (length - ia) * 5, 1500));
+  TWO_TRIES(status, (int)control_transfer(handle, 0x40, 0x62, 0, 0, buf, (length - ia) * 5, 1500));
   free(buf);
   return status;
 }
@@ -499,7 +499,7 @@ int ztex_default_lsi_set3(HANDLE handle, const uint8_t *addr, const uint32_t *va
     buf[(i - ia) * 5 + 4] = addr[i];
   }
   int status;
-  TWO_TRIES(status, control_transfer(handle, 0x40, 0x62, 0, 0, buf, (length - ia) * 5, 1500));
+  TWO_TRIES(status, (int)control_transfer(handle, 0x40, 0x62, 0, 0, buf, (length - ia) * 5, 1500));
   free(buf);
   return status;
 }
@@ -516,7 +516,7 @@ int ztex_default_lsi_set3(HANDLE handle, const uint8_t *addr, const uint32_t *va
 */
 int64_t ztex_default_lsi_get1(HANDLE handle, uint8_t addr) {
   uint8_t buf[4];
-  int status;
+  int64_t status;
   TWO_TRIES(status, control_transfer(handle, 0xc0, 0x63, 0, addr, buf, 4, 1500));
   return status<0 ? status : buf[0] | (buf[1] << 8) | (buf[2] << 16) | (buf[3] << 24);
 }
@@ -537,7 +537,7 @@ int ztex_default_lsi_get2(HANDLE handle, uint8_t addr, uint32_t *val, int length
   if (l>256) l = 256;
   uint8_t *buf = (uint8_t *)malloc(l * 4);
   int status;
-  TWO_TRIES(status, control_transfer(handle, 0xc0, 0x63, 0, addr, buf, l * 4, 1500));
+  TWO_TRIES(status, (int)control_transfer(handle, 0xc0, 0x63, 0, addr, buf, l * 4, 1500));
   if (status < 0) return status;
   for (int i = 0; i<length; i++) {
     int j = i & 255;

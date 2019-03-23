@@ -12,8 +12,14 @@
 #include "targetver.h"
 
 #define _CRT_SECURE_NO_WARNINGS
-#include "Winsock2.h"
-#include <windows.h>
+#include <afxwin.h>
+#include <afxext.h>         // MFC extensions
+
+#include <afxcontrolbars.h>     // MFC support for ribbons and control bars
+
+#include <atlbase.h>        // ATL support
+extern ATL::CComModule _Module;
+#include <atlwin.h>
 
 #include <stdint.h>
 #include <cfgmgr32.h>

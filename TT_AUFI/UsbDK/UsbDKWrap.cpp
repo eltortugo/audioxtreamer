@@ -8,8 +8,9 @@ static FARPROC get_usbdk_proc_addr(LPCSTR api_name)
 {
   FARPROC api_ptr = GetProcAddress(UsbDk.module, api_name);
 
-  if (api_ptr == NULL)
-    LOGN( "UsbDkHelper API %s not found: 0x%08X", api_name, GetLastError());
+  if (api_ptr == NULL) {
+    LOGN("UsbDkHelper API %s not found: 0x%08X", api_name, GetLastError());
+  }
 
   return api_ptr;
 }
@@ -118,12 +119,14 @@ struct libusb_control_setup {
   uint16_t wLength;
 };
 
-int control_transfer(HANDLE handle, uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue, uint16_t wIndex,
+int64_t control_transfer(HANDLE handle, uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue, uint16_t wIndex,
   unsigned char *data, uint16_t wLength, unsigned int timeout)
 {
-  uint32_t length = sizeof(libusb_control_setup) + wLength;
-  uint8_t *buffer = (uint8_t *)malloc(length);
-  struct libusb_control_setup &setup = *(struct libusb_control_setup *)buffer;
+  uint32_t sendlen = sizeof(libusb_control_setup) + wLength;
+  if (sendlen > 4096)
+    return -1;
+  uint8_t sendbuff[4096];
+  struct libusb_control_setup &setup = *(struct libusb_control_setup *)sendbuff;
   setup.bmRequestType = bmRequestType;
   setup.bRequest = bRequest;
   setup.wValue = wValue;
@@ -134,33 +137,30 @@ int control_transfer(HANDLE handle, uint8_t bmRequestType, uint8_t bRequest, uin
   ZeroMemory(&xfer, sizeof(USB_DK_TRANSFER_REQUEST));
   xfer.EndpointAddress = 0;
   xfer.TransferType = ControlTransferType;
-  xfer.Buffer = buffer;
-  xfer.BufferLength = length;
+  xfer.Buffer = sendbuff;
+  xfer.BufferLength = sendlen;
 
   TransferResult result;
 
   if (bmRequestType & 0x80)
     result = UsbDk.ReadPipe(handle, &xfer, nullptr);// &ovlp);
   else {
-    memcpy(buffer + sizeof(libusb_control_setup), data, wLength);
+    memcpy(sendbuff + sizeof(libusb_control_setup), data, wLength);
     result = UsbDk.WritePipe(handle, &xfer, nullptr);// &ovlp);
   }
 
-  if (result != TransferFailure) {
+  if (result != TransferFailure && xfer.Result.GenResult.UsbdStatus == USBD_STATUS_SUCCESS) {
 
     if (bmRequestType & 0x80)
-      memcpy(data, buffer + sizeof(libusb_control_setup), (size_t)xfer.Result.GenResult.BytesTransferred);
+      memcpy(data, sendbuff + sizeof(libusb_control_setup), (size_t)xfer.Result.GenResult.BytesTransferred);
 
-    free(buffer);
-    return (int)xfer.Result.GenResult.BytesTransferred;
-  }
-  else {
-    free(buffer);
+    return xfer.Result.GenResult.BytesTransferred;
+  } else {
     return -1;
   }
 }
 
-int bulk_transfer(HANDLE handle,
+int64_t bulk_transfer(HANDLE handle,
   uint8_t endpoint, uint8_t *data, int length,
   int *actual_length, OVERLAPPED * ovlp, unsigned int timeout)
 {
@@ -186,8 +186,7 @@ int bulk_transfer(HANDLE handle,
   switch (result)
   {
   case TransferFailure: return -1;
-  case TransferSuccess: return 0;
   default:
-    return 1;
+    return status;
   }
 }

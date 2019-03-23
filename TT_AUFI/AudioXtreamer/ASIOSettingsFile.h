@@ -9,7 +9,7 @@ public:
   ASIOSettingsFile(ASIOSettings::Settings &info);
   ~ASIOSettingsFile();
 
-  bool Open();
+  bool Load();
   bool Save();
 
 private:

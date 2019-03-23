@@ -1,23 +1,20 @@
 #pragma once
-
 #include "UsbDev\UsbDev.h"
-
-class CypressDevice : public UsbDevice
+class AudioXtreamerDevice : public UsbDevice
 {
 public:
-  explicit CypressDevice(UsbDeviceClient & client, ASIOSettings::Settings & params);
-  ~CypressDevice();
+  explicit AudioXtreamerDevice(UsbDeviceClient & client, ASIOSettings::Settings & params);
+  ~AudioXtreamerDevice();
 
   bool Open() override;
+  bool Close() override;
   bool Start() override;
   bool Stop(bool wait) override;
-  bool Close() override;
   bool IsRunning() override;
   bool IsPresent() override;
-
   bool GetStatus(UsbDeviceStatus &status) override;
-  bool ConfigureDevice() override { return false; }
-
+  bool ConfigureDevice() override;
+  
 private:
 
   void main();
@@ -26,17 +23,17 @@ private:
 
   static void StaticWorkerThread(void* arg)
   {
-    CypressDevice *inst = static_cast<CypressDevice*>(arg);
+    AudioXtreamerDevice *inst = static_cast<AudioXtreamerDevice*>(arg);
     if (inst != nullptr)
       inst->main();
   }
 
-  uint8_t mDefOutEP;
-  uint8_t mDefInEP;
-  uint8_t* mBitstream;
-  uint32_t mRsize;
-
-  HANDLE mDevHandle;
-  HANDLE hSem;
-  UsbDeviceStatus mDevStatus;
+  HANDLE hMapFile;
+  HANDLE hASIOMutex;
+  HWND   hWnd;
+  uint8_t * pStreamParams;
+  uint8_t * pTxBuf;
+  uint8_t * pRxBuf;
 };
+
+

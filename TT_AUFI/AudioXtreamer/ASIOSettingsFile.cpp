@@ -36,7 +36,7 @@ BOOL DirectoryExists(LPCTSTR szPath)
     (dwAttrib & FILE_ATTRIBUTE_DIRECTORY));
 }
 
-bool ASIOSettingsFile::Open()
+bool ASIOSettingsFile::Load()
 {
   SI_Error result = mIni.LoadFile(fileName);
   if (result != SI_OK)

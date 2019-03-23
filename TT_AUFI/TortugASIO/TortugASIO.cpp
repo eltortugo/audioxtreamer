@@ -14,11 +14,15 @@ Steinberg Audio Stream I/O API
 #include "TortugASIO.h"
 //Threading
 #include <process.h>
-#include "SettingsDlg.h"
+
 #include "timeapi.h"
 
-#include "ASIOSettingsFile.h"
-#include "ASIOSettings.h"
+#include "AudioXtreamer\ASIOSettingsFile.h"
+#include "AudioXtreamer\ASIOSettings.h"
+
+#include "AudioXtreamerDevice.h"
+#include "fx2lp\cypressdevice.h"
+
 
 using namespace ASIOSettings;
 
@@ -50,9 +54,7 @@ double AsioSamples2double(ASIOSamples* samples)
 
 
 
-// class id
-// {25CBA31C - 951A - 48C6 - B513 - 012E1E2D09D8}
-CLSID IID_ASIO_DRIVER = { 0x25CBA31C, 0x951A, 0x48C6,{ 0xB5, 0x13, 0x01, 0x2E, 0x1E, 0x2D, 0x09, 0xD8 } };
+
 #ifdef _WIN64
 const TCHAR * dllName = _T("TortugASIOx64.dll");
 const TCHAR * regKey = _T("TortugASIO x64 Driver");
@@ -70,7 +72,7 @@ const TCHAR * ifaceName = _T("TortugASIO");
 
 
 CFactoryTemplate g_Templates[1] = {
-  { className, &IID_ASIO_DRIVER, TortugASIO::CreateInstance }
+  { className, &IID_TORTUGASIO_XTREAMER, TortugASIO::CreateInstance }
 };
 int g_cTemplates = sizeof(g_Templates) / sizeof(g_Templates[0]);
 
@@ -83,7 +85,7 @@ CUnknown* TortugASIO::CreateInstance(LPUNKNOWN pUnk, HRESULT *phr)
 STDMETHODIMP TortugASIO::NonDelegatingQueryInterface(REFIID riid, void ** ppv)
 {
   //DebugBreak();
-  if (riid == IID_ASIO_DRIVER)
+  if (riid == IID_TORTUGASIO_XTREAMER)
   {
     return GetInterface(this, ppv);
   }
@@ -104,7 +106,7 @@ HRESULT _stdcall DllRegisterServer()
   LONG	rc;
   char	errstr[128];
 
-  rc = RegisterAsioDriver(IID_ASIO_DRIVER, dllName, regKey, driverName, _T("Apartment"));
+  rc = RegisterAsioDriver(IID_TORTUGASIO_XTREAMER, dllName, regKey, driverName, _T("Apartment"));
 
   if (rc) {
     memset(errstr, 0, 128);
@@ -124,7 +126,7 @@ HRESULT _stdcall DllUnregisterServer()
   LONG	rc;
   char	errstr[128];
 
-  rc = UnregisterAsioDriver(IID_ASIO_DRIVER, dllName, regKey);
+  rc = UnregisterAsioDriver(IID_TORTUGASIO_XTREAMER, dllName, regKey);
 
   if (rc) {
     memset(errstr, 0, 128);
@@ -150,7 +152,7 @@ void TortugASIO::Switch(uint32_t rxStride, uint8_t *rxBuff, uint32_t txStride, u
     // L1 M1 H1 L2 M2 H2... L24 M24 H24
     // N channels * MSB first, 24bit.
 
-    if (WaitForSingleObject(hSem, 0) == WAIT_OBJECT_0)
+    if (WaitForSingleObject(hBuffMutex, 0) == WAIT_OBJECT_0)
     {
       if (bufferActive)
       {
@@ -168,7 +170,7 @@ void TortugASIO::Switch(uint32_t rxStride, uint8_t *rxBuff, uint32_t txStride, u
           }
         }
       }
-      ReleaseSemaphore(hSem, 1, NULL);
+      ReleaseMutex(hBuffMutex);
     }
 
     if (callbacks)
@@ -180,7 +182,7 @@ void TortugASIO::Switch(uint32_t rxStride, uint8_t *rxBuff, uint32_t txStride, u
       //client reads the input data and fills the ouput data, no waiting allowed thus ASIOTrue
     }
 
-    if (WaitForSingleObject(hSem, 0) == WAIT_OBJECT_0)
+    if (WaitForSingleObject(hBuffMutex, 0) == WAIT_OBJECT_0)
     {
       if (bufferActive)
       {
@@ -198,16 +200,35 @@ void TortugASIO::Switch(uint32_t rxStride, uint8_t *rxBuff, uint32_t txStride, u
           }
         }
       }
-      ReleaseSemaphore(hSem, 1, NULL);
+      ReleaseMutex(hBuffMutex);
     }
     buffIdx ^= 1;
 }
 
 //------------------------------------------------------------------------------------------
 
-bool TortugASIO::GetDeviceStatus(UsbDeviceStatus &var)
-{  
-  return nullptr != mDevice && mDevice->GetStatus(var);
+void TortugASIO::AllocBuffers(uint32_t rxSize, uint8_t*&rxBuff, uint32_t txSize, uint8_t*&txBuff)
+{
+  rxBuff = (uint8_t*)malloc(rxSize);
+  txBuff = (uint8_t*)malloc(txSize);
+}
+
+//------------------------------------------------------------------------------------------
+
+void TortugASIO::FreeBuffers(uint8_t*&rxBuff, uint8_t*&txBuff)
+{
+  free(rxBuff);
+  rxBuff = nullptr;
+  free(txBuff);
+  txBuff = nullptr;
+}
+
+//------------------------------------------------------------------------------------------
+
+void TortugASIO::DeviceStopped(bool error)
+{//called from the device's thread context
+  if (error && callbacks && callbacks->asioMessage)
+    callbacks->asioMessage(kAsioResetRequest, 0, 0, 0);
 }
 
 //------------------------------------------------------------------------------------------
@@ -217,7 +238,7 @@ ASIOSettings::Settings gSettings =
   { 15, 15, 15,_T("NrIns"),     _T("; zero index based number of pcm LR lines")},
   { 15, 15, 15,_T("NrOuts"),    _T("; zero index based number of pcm LR lines")},
   { 64, 64, 256,_T("NrSamples"), _T("; Whats necesary to run smooth and the least 512b usb packets")},
-  { 64, 64, 256,_T("FifoSize"),  _T("; Size of the hardware Out FIFO , multiple of 16")}
+  { 64, 64, 256,_T("FifoSize"),  _T("; Size of the hardware Out FIFO")}
 };
 
 //------------------------------------------------------------------------------------------
@@ -247,16 +268,12 @@ TortugASIO::TortugASIO(LPUNKNOWN pUnk, HRESULT *phr)
   buffIdx = 0;
 
   mDevice = nullptr;
-  hSem = CreateSemaphore(
-    NULL,           // default security attributes
-    1,  // initial count
-    1,  // maximum count
-    NULL);
+  hBuffMutex = INVALID_HANDLE_VALUE;
 
-  mSettingsDlg = nullptr;
+
   mIniFile = new ASIOSettingsFile(gSettings);
   if (mIniFile) {
-    mIniFile->Open();
+    mIniFile->Load();
     mNumInputs = (gSettings[NrIns].val+1)*2;
     mNumOutputs = (gSettings[NrOuts].val+1)*2;
   }
@@ -269,14 +286,6 @@ TortugASIO::~TortugASIO()
 {
   LOG0("TortugASIO::~TortugASIO");
 
-  if (mSettingsDlg != nullptr)
-  {
-    mSettingsDlg->EndModalLoop(IDCANCEL);
-    mSettingsDlg->DestroyWindow();
-    delete mSettingsDlg;
-    mSettingsDlg = nullptr;
-  }
-
   if(started)
     stop();
   if (mDevice)
@@ -287,7 +296,10 @@ TortugASIO::~TortugASIO()
   }
 
   disposeBuffers();
-  CloseHandle(hSem);
+  if (hBuffMutex) {
+    CloseHandle(hBuffMutex);
+    hBuffMutex = INVALID_HANDLE_VALUE;
+  }
 
   delete mIniFile;
   mIniFile = nullptr;
@@ -325,15 +337,22 @@ ASIOBool TortugASIO::init(void* sysRef)
   if (active)
     return true;
   strcpy(errorMessage, "ASIO Driver open Failure!");
+#if 0
+  mDevice = new CypressDevice( *this, gSettings);
+#else
+  mDevice = new AudioXtreamerDevice(*this, gSettings);
+#endif
 
-  mDevice = UsbDevice::CreateDevice( UsbDevice::UsbDevFX2LP, *this, gSettings);
+  hBuffMutex = CreateMutex(NULL, FALSE, NULL);
 
-  if (mDevice->Open()) {
+  if (mDevice != nullptr && mDevice->Open()) {
     active = true;
     return true;
   }
 
-  delete mDevice;
+  if(mDevice)
+    delete mDevice;
+
   mDevice = nullptr;
 
   return false;
@@ -589,7 +608,7 @@ ASIOError TortugASIO::disposeBuffers()
 
   if (bufferActive)
   {
-    if (WaitForSingleObject(hSem, INFINITE) == WAIT_OBJECT_0) {
+    if (WaitForSingleObject(hBuffMutex, INFINITE) == WAIT_OBJECT_0) {
       for (i = 0; i < mNumOutputs; i++)
       {
         if (OutputBuffers[i])
@@ -614,7 +633,7 @@ ASIOError TortugASIO::disposeBuffers()
       callbacks = 0;
       activeOutputs = 0;
       activeInputs = 0;
-      ReleaseSemaphore(hSem, 1, NULL);
+      ReleaseMutex(hBuffMutex);
     }
   }
  
@@ -624,10 +643,8 @@ ASIOError TortugASIO::disposeBuffers()
 //---------------------------------------------------------------------------------------------
 ASIOError TortugASIO::controlPanel()
 {
-  //MessageBox(0, _T("32ch+32ch@48Khz"), _T("TortugASIO"), MB_TASKMODAL | MB_ICONINFORMATION);
-  AFX_MANAGE_STATE(AfxGetStaticModuleState());
-  ASIOSettingsDlg dlg(*mDevice, gSettings);
-  if (dlg.DoModal() == IDOK)
+  //send message to AudioXtreamer and wait for the completion of the dialog
+  if ( mDevice != nullptr && mDevice->ConfigureDevice() && mIniFile->Load())
   {
     mNumInputs = (gSettings[NrIns].val+1)*2;
     mNumOutputs = (gSettings[NrOuts].val+1)*2;

@@ -30,6 +30,7 @@ entity fifo_to_m_axis is
 
     status_1 : in slv_8;
     status_2 : in slv_8;
+	 status_refresh : out std_logic;
     in_fifo_empty: in std_logic;
     in_fifo_rd   : out std_logic;
     in_fifo_data : in slv24_array(0 to (max_sdi_lines*2)-1)
@@ -178,12 +179,11 @@ begin
       elsif tx_state /= txst_idle and m_axis_tready = '1' then
         if tx_state = txst_header then
           case word_counter is
-
             when 0 | header_size - 1 =>
               m_axis_tdata <= header(word_counter);
-            when 1 =>
+            when 1 =>				
               m_axis_tdata <= status_2 & status_1;
-             when others =>
+            when others =>
               m_axis_tdata <= X"CDCD";
           end case;
         elsif tx_state = txst_data then
@@ -223,5 +223,18 @@ begin
     end if;
   end process;
   ------------------------------------------------------------------------------------------------------------
+  
+  proc_status_refresh: process (clk)
+  begin
+    if rising_edge(clk) then
+	   if reset = '1' then
+		  status_refresh <= '0';
+		elsif tx_state = txst_header and word_counter = 0 and m_axis_tready = '1' then
+		  status_refresh <= '1';
+		else
+		  status_refresh <= '0';
+		end if;		
+    end if;    
+  end process;
 
 end architecture;

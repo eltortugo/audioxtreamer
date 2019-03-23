@@ -6,40 +6,37 @@
 
 #include "UsbDev\UsbDev.h"
 #include "resource.h"
-#include "wxx_dialog.h"
+#include "ASIOSettings.h"
+
 
 
 // CAudioXtreamerDlg dialog
-class CypressDevice;
-class CAudioXtreamerDlg : public CDialog, public UsbDeviceClient
+template <class T>
+class CAudioXtreamerDlg : public T
 {
 // Construction
 public:
-	CAudioXtreamerDlg(); // standard constructor
+	CAudioXtreamerDlg(UsbDevice & device, ASIOSettings::Settings &info); // standard constructor
   ~CAudioXtreamerDlg();
-
-  void Switch(uint32_t rxSampleSize, uint8_t *rxBuff, uint32_t txSampleSize, uint8_t *txBuff) override;
 
 // Dialog Data
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_AUDIOXTREAMER_DIALOG };
 #endif
+  DECLARE_MESSAGE_MAP()
 
 	protected:
-	virtual void DoDataExchange(CDataExchange &DX);	// DDX/DDV support
-  INT_PTR DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam) override;
+	virtual void DoDataExchange(CDataExchange *DX)override;	// DDX/DDV support
+
   virtual BOOL OnCommand(WPARAM wParam, LPARAM lParam);
 
 // Implementation
 protected:
 	HICON m_hIcon;
-
-  UsbDevice * mDevice;
-
+  UsbDevice & mDevice;
 
 	virtual BOOL OnInitDialog();
 
-  LRESULT OnPaint(UINT uMsg, WPARAM wParam, LPARAM lParam) override;
 	HCURSOR OnQueryDragIcon();
 
 public:
@@ -53,4 +50,8 @@ public:
   void OnRecvAsync();
   void OnStartStream();
   void OnStopStream();
+  afx_msg void OnPaint();
+  afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
 };
+
+#include "AudioXtreamerDlg.cpp"

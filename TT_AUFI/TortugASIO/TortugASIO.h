@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #include "UsbDev\UsbDev.h"
-class ASIOSettingsDlg;
+
 class ASIOSettingsFile;
 class TortugASIO : public IASIO, public CUnknown, public UsbDeviceClient
 {
@@ -49,7 +49,9 @@ public:
   ASIOError outputReady();
 
   void Switch(uint32_t rxSampleSize, uint8_t *rxBuff, uint32_t txSampleSize, uint8_t *txBuff) override;
-  bool GetDeviceStatus(UsbDeviceStatus &var) override;
+  void AllocBuffers(uint32_t rxSize, uint8_t *&rxBuff, uint32_t txSize, uint8_t *&txBuff) override;
+  void FreeBuffers(uint8_t *&rxBuff, uint8_t *&txBuff) override;
+  void DeviceStopped(bool error) override;
 
   double samplePosition;
   double sampleRate;
@@ -82,8 +84,8 @@ public:
   volatile bool bufferActive;
 
   UsbDevice * mDevice;
-  ASIOSettingsDlg * mSettingsDlg;
+
   ASIOSettingsFile * mIniFile;
-  HANDLE hSem;
+  HANDLE hBuffMutex;
 
 };

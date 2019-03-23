@@ -198,7 +198,7 @@ end process;
 flagb <= not ft_ntxe;
 
 inst: entity work.CY16_to_iis
-generic map( sdi_lines => dut_nr_inputs/2, sdo_lines => dut_nr_outputs/2 )--, bit_depth => 24 )
+--generic map( sdi_lines => dut_nr_inputs/2, sdo_lines => dut_nr_outputs/2 )--, bit_depth => 24 )
 port map(
 
     led(7 downto 0) => led(7 downto 0),
@@ -214,9 +214,9 @@ port map(
     FLAGA => '1', -- repeat the message
     FLAGB => flagb,
     
-    SLRD  => ft_nRD,
-    SLOE  => ft_nOE,
-    SLWR   => ft_nwr,    
+    SLRDn  => ft_nRD,
+    SLOEn  => ft_nOE,
+    SLWRn   => ft_nwr,    
         
     ain => sd_out(11 downto 0), --loopback    
     aout => sd_out(11 downto 0),

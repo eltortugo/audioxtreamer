@@ -8,6 +8,7 @@
 
 #include "UsbDK\UsbDKWrap.h"
 #include "ZTEXDev\ztexdev.h"
+#include "resource.h"
 
 
 #include <tchar.h>
@@ -35,9 +36,10 @@ int gcd(int a, int b)
 
 using namespace ASIOSettings;
 
+uint8_t setyb[256];
+
 CypressDevice::CypressDevice(UsbDeviceClient & client, ASIOSettings::Settings &params )
-  : devClient(client)
-  , devParams(params)
+  : UsbDevice(client,params)
 {
   LOG0("CypressDevice::CypressDevice");
 
@@ -46,16 +48,57 @@ CypressDevice::CypressDevice(UsbDeviceClient & client, ASIOSettings::Settings &p
   mDevHandle = INVALID_HANDLE_VALUE;
   mExitHandle = INVALID_HANDLE_VALUE;
 
+
   hSem = CreateSemaphore(
     NULL,           // default security attributes
     1,  // initial count
     1,  // maximum count
     NULL);
+
+  for (int b = 0; b < 256; ++b)
+  {
+    setyb [b] = ((b & 128) >> 7) |
+      ((b & 64) >> 5) |
+      ((b & 32) >> 3) |
+      ((b & 16) >> 1) |
+      ((b & 8) << 1) |
+      ((b & 4) << 3) |
+      ((b & 2) << 5) |
+      ((b & 1) << 7);
+  }
+
+  HRSRC hrc = FindResource(NULL, MAKEINTRESOURCE(IDR_FPGA_BIN), _T("RC_DATA"));
+  HGLOBAL hg = LoadResource(NULL, hrc);
+  uint8_t* bits = (uint8_t*)LockResource(hg);
+  mBitstream = nullptr;
+
+  if (bits)
+  {
+    mRsize = SizeofResource(NULL, hrc);
+    
+    uint8_t * bitstream = (uint8_t *)malloc(mRsize +512);
+    ZeroMemory(bitstream, 512);
+
+    uint8_t* buf = bitstream + 512;
+    for (uint32_t c = 0; c < mRsize; c++, buf++) {
+      register uint8_t b = bits[c];
+      *buf = setyb[b];
+    }
+
+    mBitstream = bitstream;
+    mRsize += 512;
+  }
 }
 
 CypressDevice::~CypressDevice()
 {
   LOG0("CypressDevice::~CypressDevice");
+
+  if (mBitstream) {
+    free(mBitstream);
+    mBitstream = nullptr;
+  }
+
   if (mExitHandle != INVALID_HANDLE_VALUE)
     DebugBreak();
 
@@ -63,18 +106,18 @@ CypressDevice::~CypressDevice()
   CloseHandle(hSem);
 }
 
-uint32_t CypressDevice::GetFifoSize() {
-  LOG0("CypressDevice::GetFifoSize");
-  return ((out_fifo_size + 1) << 2);
-}
-
 bool CypressDevice::Start()
 {
   LOG0("CypressDevice::Start");
 
-  DWORD dwExCode;
+  //let's try to identify the fpga
+  int64_t get_result = ztex_default_lsi_get1(mDevHandle, 0);
+  if (get_result != 0x47545254)
+    return false;
+
 
   if (hth_Worker != INVALID_HANDLE_VALUE) {
+    DWORD dwExCode;
     GetExitCodeThread(hth_Worker, &dwExCode);
     if (dwExCode == STILL_ACTIVE)
       return true;
@@ -84,7 +127,8 @@ bool CypressDevice::Start()
   if (hth_Worker != INVALID_HANDLE_VALUE) {
     ::SetThreadPriority(hth_Worker, THREAD_PRIORITY_TIME_CRITICAL);
     return true;
-  } return false;
+  }
+  return false;
 }
 
 bool CypressDevice::Stop(bool wait)
@@ -112,21 +156,21 @@ bool CypressDevice::Stop(bool wait)
 
 //---------------------------------------------------------------------------------------------
 
-USB_DK_DEVICE_ID GetDeviceID()
+int GetDeviceID(USB_DK_DEVICE_ID * ret)
 {
   const int id_vendor = 0x221A;  	// ZTEX vendor ID
   const int id_product = 0x100; 	// default product ID for ZTEX firmware
 
   PUSB_DK_DEVICE_INFO DevInfo = nullptr;
   ULONG DevCount = 0;
-  USB_DK_DEVICE_ID ret = { 0,0 };
+  int dev_idx = -1;
 
   BOOL r = UsbDk.GetDevicesList(&DevInfo, &DevCount);
   if (r == FALSE)
     goto exit;
 
   // find device
-  int dev_idx = -1;
+ 
   for (ULONG i = 0; i < DevCount; i++) {
     USB_DEVICE_DESCRIPTOR *desc = &DevInfo[i].DeviceDescriptor;
     if ((desc->idVendor == id_vendor) && (desc->idProduct == id_product)) {
@@ -135,18 +179,15 @@ USB_DK_DEVICE_ID GetDeviceID()
     }
   }
 
-  if (dev_idx<0) {
-    if (dev_idx == -1)
-      fprintf(stderr, "Error: No device found\n");
-    goto exit;
-  }
+  if(dev_idx >= 0 && ret)
+    *ret = DevInfo[dev_idx].ID;
 
-  ret = DevInfo[dev_idx].ID;
-exit:
+  exit:
+
   if (DevInfo)
     UsbDk.ReleaseDevicesList(DevInfo);
 
-  return ret;
+  return dev_idx;
 }
 
 //---------------------------------------------------------------------------------------------
@@ -158,13 +199,17 @@ bool CypressDevice::Open()
   mDefOutEP = 0;
   mDefInEP = 0;
   memset(&info, 0, sizeof(ztex_device_info));
-  char *bitstream_fn = NULL, *bitstream_path = NULL;
 
   if (!load_usbdk())
     return false;
 
-  USB_DK_DEVICE_ID devid = GetDeviceID();
-  HANDLE handle = UsbDk.StartRedirect(&devid);
+  HANDLE handle = INVALID_HANDLE_VALUE;
+
+  USB_DK_DEVICE_ID devid;
+  if (GetDeviceID(&devid) < 0)
+    return false;
+
+  handle = UsbDk.StartRedirect(&devid);
 
   if (INVALID_HANDLE_VALUE == handle)
     goto err;
@@ -189,27 +234,36 @@ bool CypressDevice::Open()
     goto err;
   else if (status == 0) {
     // find bitstream
-    bitstream_fn = ztex_find_bitstream(&info, bitstream_path ? bitstream_path : "F:\\devel\\FPGA\\ZTEX201\\USB32chAudio", "cy16_to_iis");
-    if (bitstream_fn) {
-      printf("Using bitstream '%s'\n", bitstream_fn);
-      fflush(stdout);
-    }
-    else {
-      fprintf(stderr, "Warning: Bitstream not found\n");
-      goto nobitstream;
+   if (mBitstream != nullptr) {
+#define EP0_TRANSACTION_SIZE 2048
+#define BUF_SIZE 32768
+
+      // reset FPGA
+      TWO_TRIES(status, (int)control_transfer(handle, 0x40, 0x31, 0, 0, NULL, 0, 1500));
+      // transfer data
+      status = 0;
+      uint32_t last_idx = mRsize % BUF_SIZE;
+      int bufs_idx = (mRsize / BUF_SIZE) + ( last_idx == 0 ? 0 : 1);
+      //TODO: simplify this to a single loop
+      for (int i = 0; (status >= 0) && (i<bufs_idx); i++) {
+        int j = i == (bufs_idx - 1) ? last_idx : BUF_SIZE;
+        uint8_t *buf = mBitstream + (i*BUF_SIZE);
+
+        for (int k = 0; (status >= 0) && (k<j); k += EP0_TRANSACTION_SIZE) {
+          int l = j - k < EP0_TRANSACTION_SIZE ? j - k : EP0_TRANSACTION_SIZE;
+          TWO_TRIES(status, (int)control_transfer(handle, 0x40, 0x32, 0, 0, buf + k, l, 1500));
+          if (status<0) {
+            status = -1;
+          }
+          else if (status != l) {
+            status = -1;
+          }
+        }
+      }
+    } else {
+     goto err;
     }
 
-    // read and upload bitstream
-    FILE *fd = fopen(bitstream_fn, "rb");
-    if (fd == NULL) {
-      fprintf(stderr, "Warning: Error opening file '%s'\n", bitstream_fn);
-      goto nobitstream;
-    }
-    status = ztex_upload_bitstream(handle, &info, fd, -1);
-    fclose(fd);
-
-
-  nobitstream:
     fflush(stderr);
     // check config
     status = ztex_get_fpga_config(handle);
@@ -223,7 +277,6 @@ bool CypressDevice::Open()
     }
   }
 
-  //ztex_default_gpio_ctl(handle, 0, 0);
   ztex_default_reset(handle, 0);
 
   status = 0;
@@ -231,9 +284,9 @@ bool CypressDevice::Open()
 
 err:
   status = 1;
+   if(handle !=  INVALID_HANDLE_VALUE)
+    UsbDk.StopRedirect(handle);
 noerr:
-  if (bitstream_fn)
-    free(bitstream_fn);
 
   mDevHandle = status == 0 ? handle : INVALID_HANDLE_VALUE;
   if (status == 0)
@@ -256,59 +309,18 @@ bool CypressDevice::Close()
   }
 
   if (mDevHandle != INVALID_HANDLE_VALUE) {
-    UsbDk.StopRedirect(mDevHandle);
+    BOOL result = UsbDk.StopRedirect(mDevHandle);
     //wait for disconnection before a reattempt to open
-    do {
-      Sleep(10);
-    } while (GetDeviceID().DeviceID[0] == 0);
+    Sleep(10);
     mDevHandle = INVALID_HANDLE_VALUE;
   }
 
   return true;
 }
 
-//---------------------------------------------------------------------------------------------
-
-bool CheckIntegrity(uint8_t *buffer, uint32_t stride, uint32_t nrPackets) //receive buffer of RxPayloadSize
-{
-  uint8_t * ptr = buffer;
-
-  for (uint32_t i = 0; i < nrPackets; ++i)
-    if (ptr[0] == 0x55 && ptr[1] == 0xAA && ptr[4] == 0xff && ptr[5] == 0x00)
-      ptr += stride;
-    else
-      return false;
-
-  return true;
-}
 
 //---------------------------------------------------------------------------------------------
 
-bool CypressDevice::SendAsync(unsigned int size, unsigned int timeout)
-{
-  //int xfered = 0;
-  //int r = bulk_transfer(mDevHandle, mDef_out_ep, mOUTBuff, TxPayloadSize , &xfered  , nullptr, 1000);
-  return true;
-}
-
-//---------------------------------------------------------------------------------------------
-
-bool CypressDevice::RecvAsync(unsigned int size, unsigned int timeout)
-{
-  //int xfered = 0;
-  //OVERLAPPED ovlp;
-  //ovlp.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-  ////uint8_t buff[512] = { 0xAA, 0x55, 0, kNumInputs / 2, 0xFF , 0,0,0,0,0,0,0 };
-  //ztex_default_reset(mDevHandle, 0);
-  //bulk_transfer(mDevHandle, info->default_out_ep, mOUTBuff[0], TxPayloadSize, &xfered, nullptr, 1000);
-  //int r = bulk_transfer(mDevHandle, info->default_in_ep, mINBuff[0], RxPayloadSize , &xfered, &ovlp, 1000);
-  //CheckIntegrity(mINBuff[0]);
-
-  //CloseHandle(ovlp.hEvent);
-  return true;
-}
-
-//---------------------------------------------------------------------------------------------
 #define USB_BLK 512
 #define UDIV_UP(a, b) (((a) + (b) - 1) / (b))
 #define ALIGN_UP(a, b) (UDIV_UP(a, b) * (b))
@@ -331,9 +343,15 @@ bool CypressDevice::IsRunning() {
   return mExitHandle != INVALID_HANDLE_VALUE;
 }
 
-void CypressDevice::WorkerThread()
+bool CypressDevice::IsPresent() {
+  return mDevHandle != INVALID_HANDLE_VALUE;
+}
+
+#define LAP(start,stop) ((uint32_t)(((stop.QuadPart - start.QuadPart) * 1000000) / lif.QuadPart))
+
+void CypressDevice::main()
 {
-  LOG0("CypressDevice::WorkerThread");
+  LOG0("CypressDevice::main");
   if ( mDevHandle == INVALID_HANDLE_VALUE)
     //signal the parent of the thread failure
     return;
@@ -341,7 +359,7 @@ void CypressDevice::WorkerThread()
   HANDLE handles[2] = { 0,0 };
   handles[0] = CreateEvent(NULL, FALSE, FALSE, _T("TORTUGASIO_TX_EVENT"));
   handles[1] = CreateEvent(NULL, FALSE, FALSE, _T("TORTUGASIO_RX_EVENT"));
-  mExitHandle = CreateEvent(NULL, TRUE, FALSE, _T("TORTUGASIO_EXIT_EVENT"));
+  mExitHandle = CreateEvent(NULL, TRUE, FALSE, NULL);
   ResetEvent(mExitHandle);
 
   OVERLAPPED tx_ovlp;
@@ -353,18 +371,18 @@ void CypressDevice::WorkerThread()
   const uint32_t nrIns = (devParams[NrIns].val+1)*2;
   const uint32_t nrOuts = (devParams[NrOuts].val+1)*2;
   const uint32_t nrSamples = devParams[NrSamples].val;
-  const uint32_t fifoDepth = devParams[FifoDepth].val-1;
+  const uint32_t fifoDepth = devParams[FifoDepth].val;
 
   const uint32_t InStride = nrIns * 3;
   const uint32_t InDataSize = RxHeaderSize + (InStride * nrSamples);
   const uint32_t INBuffSize = ALIGN_UP(InDataSize, USB_BLK);
-  uint8_t* mINBuff = new uint8_t[INBuffSize * 2];
-  ZeroMemory(mINBuff, INBuffSize * 2);
 
   const uint32_t OUTStride = TxHeaderSize + (nrOuts * 3);
   const uint32_t OUTBuffSize = OUTStride * nrSamples;
-  uint8_t* mOUTBuff = new uint8_t[OUTBuffSize * 2];
-  ZeroMemory(mOUTBuff, OUTBuffSize * 2);
+
+  uint8_t *mINBuff = nullptr, *mOUTBuff = nullptr;
+  devClient.AllocBuffers(INBuffSize * 2, mINBuff, OUTBuffSize * 2, mOUTBuff);
+
   uint8_t * inPtr[2] = { mINBuff , mINBuff+ INBuffSize };
   uint8_t * outPtr[2] = { mOUTBuff , mOUTBuff + OUTBuffSize };
   //initialize header mark
@@ -399,17 +417,14 @@ void CypressDevice::WorkerThread()
 
   status = ztex_default_lsi_set1(mDevHandle, 4, ch_params.u32);
 
- 
-
-  for (uint8_t r = 0; r < 8; r++)
-    mDevStatus.st[r] = (uint32_t)ztex_default_lsi_get1(mDevHandle, r);
-
+  ZeroMemory(&mDevStatus, sizeof(mDevStatus));
   uint16_t BuffNr = 0, Addr = 0;
   USB_DK_TRANSFER_REQUEST TXreq = { mDefOutEP, mOUTBuff, OUTBuffSize, BulkTransferType };
   USB_DK_TRANSFER_REQUEST RXreq = { mDefInEP, mINBuff, INBuffSize, BulkTransferType };
 
-  while ( WaitForSingleObject( mExitHandle, 0) == WAIT_TIMEOUT )
-  {
+
+
+  while ( WaitForSingleObject( mExitHandle, 0) == WAIT_TIMEOUT ) {
     TXreq.Buffer = outPtr[BuffNr];
     RXreq.Buffer = inPtr[BuffNr];
 
@@ -419,64 +434,78 @@ void CypressDevice::WorkerThread()
     //start of the heavy work
     //do as much as you can from here
 
-    //if (WaitForSingleObject(hSem, 0) == WAIT_OBJECT_0)
-    //{
-    //  for (uint8_t r = 0; r < 8; r++)
-    //    mDevStatus.st[0] = (uint32_t)ztex_default_lsi_get1(mDevHandle, 0);
-    //  ReleaseSemaphore(hSem, 1, NULL);
-    //}
-
     BuffNr ^= 1;
+    int64_t get_result = ztex_default_lsi_get1(mDevHandle, 2);
 
-    
     //data is on the way so we can pass what we got from the last operation to the client
     devClient.Switch(InStride , inPtr[BuffNr] + RxHeaderSize + (INBuffSize-InDataSize), OUTStride, outPtr[BuffNr] + TxHeaderSize);
-    //stop of the heavy work
 
-    //Work done, now we wait for the usb completion
-    WaitForMultipleObjects(2, handles, true, 100);
-    //WaitForSingleObject(tx_ovlp.hEvent, 100);
-    uint8_t * ptr = (uint8_t *)RXreq.Buffer;
-    /*ASSERT(ptr[0] == 0x55 &&
-           ptr[1] == 0xaa &&
-           //ptr[2] >  0 &&
-           ptr[4] == 0xff &&
-           ptr[5] == 0x00);*/
-  }
 
-  CloseHandle(handles[0]);
-  CloseHandle(handles[1]);
-  delete mINBuff;
-  delete mOUTBuff;
-  CloseHandle(mExitHandle);
-  mExitHandle = INVALID_HANDLE_VALUE;
-  LOG0("CypressDevice::WorkerThread Exit");
-}
-
-//---------------------------------------------------------------------------------------------
-bool CypressDevice::GetStatus(UsbDeviceStatus &param)
-{
-  bool result = false;
-  if (mDevHandle != INVALID_HANDLE_VALUE)
-    if (WaitForSingleObject(hSem, 0) == WAIT_OBJECT_0)
+    //2 steps to identify a timeout
+    DWORD wresult = WaitForMultipleObjects(2, handles, false, 1000);
+    DWORD result0 = WAIT_FAILED, result1 = WAIT_FAILED;
+    switch (wresult)
     {
-      if(mExitHandle != INVALID_HANDLE_VALUE)
-        param = mDevStatus;
-      else
-        for (uint8_t r = 0; r < 8; r++)
-          param.st[r] = (uint32_t)ztex_default_lsi_get1(mDevHandle, r);
-
-
-      ReleaseSemaphore(hSem, 1, NULL);
-      result = true;
+    case WAIT_OBJECT_0:
+      result0 = WAIT_OBJECT_0;
+      result1 = WaitForSingleObject(handles[1], 1000);
+      break;
+    case (WAIT_OBJECT_0 + 1):
+      result1 = WAIT_OBJECT_0;
+      result0 = WaitForSingleObject(handles[0], 1000);
+      break;
     }
 
-  return result; 
+    //check that the fpga is pushing data and that we have usb connection with the fx2lp
+    if ( result0 != WAIT_OBJECT_0 || result1 != WAIT_OBJECT_0 || get_result < 0)
+    {
+      LOGN("WorkerError result0:0x%08X result1:0x%08X get_result:%d\n", result0, result1 , get_result);
+      devClient.DeviceStopped(true);
+      break;
+    }
+    else
+      mDevStatus.LastSR = uint32_t(get_result);
+
+    uint8_t * ptr = (uint8_t *)RXreq.Buffer;
+    mDevStatus.FifoLevel = ptr[2];
+    mDevStatus.SkipCount = ptr[3];
+
+
+    if(ptr[0] != 0x55 || ptr[1] != 0xaa || ptr[4] != 0xff || ptr[5] != 0x00) {
+      //out of sync, reset fifo and reprogram
+      //flush and init fifos
+      status = ztex_xlabs_init_fifos(mDevHandle);
+      status = ztex_default_lsi_set1(mDevHandle, 4, ch_params.u32);
+      mDevStatus.ResyncErrors++;
+    }
+  }
+
+  devClient.FreeBuffers(mINBuff, mOUTBuff);
+ 
+  CloseHandle(handles[0]);
+  CloseHandle(handles[1]);
+  CloseHandle(mExitHandle);
+  mExitHandle = INVALID_HANDLE_VALUE;
+  LOG0("CypressDevice::main Exit");
 }
 
 
-
-
-
-
+bool CypressDevice::GetStatus(UsbDeviceStatus & status)
+{
+  if (mDevHandle != INVALID_HANDLE_VALUE) {
+    if (mExitHandle != INVALID_HANDLE_VALUE) {
+      status = mDevStatus;
+    } else {
+      int64_t result = ztex_default_lsi_get1(mDevHandle, 2);
+      if (result < 0) {
+        return false;
+      } else {
+        ZeroMemory(&status, sizeof(UsbDeviceStatus));
+        status.LastSR = (uint32_t)result;
+      }
+    }
+    return true;
+  }
+  return false;
+}
 
