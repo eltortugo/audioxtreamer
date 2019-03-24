@@ -12,29 +12,17 @@ Steinberg Audio Stream I/O API
 #include <time.h>
 
 #include "TortugASIO.h"
-//Threading
-#include <process.h>
 
-#include "timeapi.h"
 
 #include "AudioXtreamer\ASIOSettingsFile.h"
 #include "AudioXtreamer\ASIOSettings.h"
 
 #include "AudioXtreamerDevice.h"
-#include "fx2lp\cypressdevice.h"
-
 
 using namespace ASIOSettings;
 
-
-
-
-#define DEFAULT_SAMPLING_RATE 48000
-#define NR_INS 32
-#define NR_OUTS 32
-#define NR_SAMPLES 64
-
-
+#include "timeapi.h"
+#pragma comment (lib, "winmm.lib") 
 
 //Time utility
 static const double twoRaisedTo32 = 4294967296.0;
@@ -104,14 +92,14 @@ extern LONG UnregisterAsioDriver(const CLSID&, const TCHAR *, const TCHAR *);
 HRESULT _stdcall DllRegisterServer()
 {
   LONG	rc;
-  char	errstr[128];
+  TCHAR	errstr[128];
 
   rc = RegisterAsioDriver(IID_TORTUGASIO_XTREAMER, dllName, regKey, driverName, _T("Apartment"));
 
   if (rc) {
-    memset(errstr, 0, 128);
-    sprintf(errstr, "Register Server failed ! (%d)", rc);
-    MessageBox(0, (LPCTSTR)errstr, (LPCTSTR)"ASIO TortugASIO Driver", MB_OK);
+    ZeroMemory(errstr, sizeof(errstr));
+    _stprintf(errstr, _T("Register Server failed ! (%d)"), rc);
+    MessageBox(0, errstr, _T("ASIO TortugASIO Driver"), MB_OK);
     return -1;
   }
 
@@ -124,14 +112,14 @@ HRESULT _stdcall DllRegisterServer()
 HRESULT _stdcall DllUnregisterServer()
 {
   LONG	rc;
-  char	errstr[128];
+  TCHAR	errstr[128];
 
   rc = UnregisterAsioDriver(IID_TORTUGASIO_XTREAMER, dllName, regKey);
 
   if (rc) {
-    memset(errstr, 0, 128);
-    sprintf(errstr, "Unregister Server failed ! (%d)", rc);
-    MessageBox(0, (LPCTSTR)errstr, (LPCTSTR)"ASIO TortugASIO Driver", MB_OK);
+	ZeroMemory(errstr, sizeof(errstr));
+	_stprintf(errstr, _T("Unregister Server failed ! (%d)"), rc);
+    MessageBox(0, errstr, _T("ASIO TortugASIO Driver"), MB_OK);
     return -1;
   }
 
@@ -140,7 +128,7 @@ HRESULT _stdcall DllUnregisterServer()
 
 //---------------------------------------------------------------------------------------------
 
-void TortugASIO::Switch(uint32_t rxStride, uint8_t *rxBuff, uint32_t txStride, uint8_t *txBuff)
+bool TortugASIO::Switch(uint32_t timeout, uint32_t rxStride, uint8_t *rxBuff, uint32_t txStride, uint8_t *txBuff)
 {
 
     unsigned char L;
@@ -203,6 +191,7 @@ void TortugASIO::Switch(uint32_t rxStride, uint8_t *rxBuff, uint32_t txStride, u
       ReleaseMutex(hBuffMutex);
     }
     buffIdx ^= 1;
+    return true;
 }
 
 //------------------------------------------------------------------------------------------
@@ -231,6 +220,11 @@ void TortugASIO::DeviceStopped(bool error)
     callbacks->asioMessage(kAsioResetRequest, 0, 0, 0);
 }
 
+void TortugASIO::SampleRateChanged()
+{
+  DeviceStopped(true);
+}
+
 //------------------------------------------------------------------------------------------
 
 ASIOSettings::Settings gSettings =
@@ -251,8 +245,7 @@ TortugASIO::TortugASIO(LPUNKNOWN pUnk, HRESULT *phr)
   // typically blockFrames * 2; try to get 1 by offering direct buffer
   // access, and using asioPostOutput for lower latency
   samplePosition = 0;
-  sampleRate = DEFAULT_SAMPLING_RATE;
-  milliSeconds = (long)((double)(mNumSamples * 1000) / sampleRate);
+
   active = false;
   started = false;
   bufferActive = false;
@@ -424,7 +417,7 @@ ASIOError TortugASIO::getBufferSize(long *minSize, long *maxSize,
 ASIOError TortugASIO::canSampleRate(ASIOSampleRate sampleRate)
 {
   LOG0("TortugASIO::canSampleRate");
-  if (sampleRate == DEFAULT_SAMPLING_RATE)		// TODO: allow these rates only, parse the response from the fpga looking for the sampling rate
+  if ( mDevice != nullptr && sampleRate == mDevice->GetSampleRate())
     return ASE_OK;
   return ASE_NoClock;
 }
@@ -433,7 +426,10 @@ ASIOError TortugASIO::canSampleRate(ASIOSampleRate sampleRate)
 ASIOError TortugASIO::getSampleRate(ASIOSampleRate *sampleRate)
 {
   LOG0("TortugASIO::getSampleRate");
-  *sampleRate = this->sampleRate;
+  if (mDevice != nullptr) {
+    *sampleRate = (ASIOSampleRate)mDevice->GetSampleRate();
+    return ASE_OK;
+  }
   return ASE_OK;
 }
 
@@ -441,7 +437,7 @@ ASIOError TortugASIO::getSampleRate(ASIOSampleRate *sampleRate)
 ASIOError TortugASIO::setSampleRate(ASIOSampleRate sampleRate)
 {
   LOG0("TortugASIO::setSampleRate");
-  if (sampleRate != DEFAULT_SAMPLING_RATE )
+  if (mDevice == nullptr || sampleRate != (ASIOSampleRate)mDevice->GetSampleRate())
     return ASE_NoClock;
 
   return ASE_OK;
@@ -539,20 +535,22 @@ ASIOError TortugASIO::createBuffers(ASIOBufferInfo *bufferInfos, long numChannel
 
   OutputBuffers = new uint8_t*[mNumOutputs];
   outMap = new long[mNumOutputs];
-  for (i = 0; i < mNumOutputs; i++)
-  {
-    OutputBuffers[i] = new uint8_t[blockFrames * 3 * 2];
-    memset(OutputBuffers[i], 0, blockFrames * 3 * 2);
+  OutputBuffers[0] = new uint8_t[mNumOutputs * blockFrames * 3 * 2];  
+  ZeroMemory(OutputBuffers[0], mNumOutputs * blockFrames * 3 * 2);
+
+  for (i = 0; i < mNumOutputs; i++) {
+    OutputBuffers[i] = OutputBuffers[0] + (blockFrames * 3 * 2)*i;    
     outMap[i] = -1;
   }
 
   InputBuffers = new uint8_t*[mNumInputs];
   inMap = new long[mNumInputs];
-  for (i = 0; i < mNumInputs; i++)
-  {
-    InputBuffers[i] = new uint8_t[blockFrames * 3 * 2];
-    memset(InputBuffers[i], 0, blockFrames * 3 * 2);
-    inMap[i] = -1;
+  InputBuffers[0] = new uint8_t[mNumInputs * blockFrames * 3 * 2];
+  ZeroMemory(InputBuffers[0], mNumOutputs * blockFrames * 3 * 2);
+
+  for (i = 0; i < mNumInputs; i++) {
+	InputBuffers[i] = InputBuffers[0] + (blockFrames * 3 * 2) * i;
+	inMap[i] = -1;
   }
 
   for (i = 0; i < numChannels; i++, info++)
@@ -585,15 +583,14 @@ ASIOError TortugASIO::createBuffers(ASIOBufferInfo *bufferInfos, long numChannel
       asioTime.timeInfo.speed = 1.;
       asioTime.timeInfo.systemTime.hi = asioTime.timeInfo.systemTime.lo = 0;
       asioTime.timeInfo.samplePosition.hi = asioTime.timeInfo.samplePosition.lo = 0;
-      asioTime.timeInfo.sampleRate = sampleRate;
+      asioTime.timeInfo.sampleRate = (ASIOSampleRate)((mDevice == nullptr || !mDevice->IsPresent()) ? 48000 : mDevice->GetSampleRate());
       asioTime.timeInfo.flags = kSystemTimeValid | kSamplePositionValid | kSampleRateValid;
 
       asioTime.timeCode.speed = 1.;
       asioTime.timeCode.timeCodeSamples.lo = asioTime.timeCode.timeCodeSamples.hi = 0;
       asioTime.timeCode.flags = kTcValid | kTcRunning;
     }
-  }
-  else {
+  } else {
     timeInfoMode = false;
   }
 
@@ -604,26 +601,15 @@ ASIOError TortugASIO::createBuffers(ASIOBufferInfo *bufferInfos, long numChannel
 ASIOError TortugASIO::disposeBuffers()
 {
   LOG0("TortugASIO::disposeBuffers");
-  long i;
 
   if (bufferActive)
   {
     if (WaitForSingleObject(hBuffMutex, INFINITE) == WAIT_OBJECT_0) {
-      for (i = 0; i < mNumOutputs; i++)
-      {
-        if (OutputBuffers[i])
-          delete(OutputBuffers[i]);
-      }
       delete OutputBuffers;
       OutputBuffers = nullptr;
       delete outMap;
       outMap = nullptr;
 
-      for (i = 0; i < mNumInputs; i++)
-      {
-        if (InputBuffers[i])
-          delete(InputBuffers[i]);
-      }
       delete InputBuffers;
       InputBuffers = nullptr;
       delete inMap;

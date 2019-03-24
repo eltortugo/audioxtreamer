@@ -51,7 +51,7 @@ port (
 );
 end ezusb_lsi;
 
-architecture Behavioral of ezusb_lsi is
+architecture sim of ezusb_lsi is
 
 begin
 
@@ -67,17 +67,25 @@ in_addr <= X"00";
 in_strobe <= '0';
 
 wait until falling_edge(reset_in);
+
 wait until rising_edge(clk);
-
-in_data <= X"104040FF";
-in_addr <= X"04";
+--in_data <= X"0000014A";
+in_data <= X"00000005";
+in_addr <= X"05";
 in_strobe <= '1';
-
 wait until rising_edge(clk);
 in_strobe <= '0';
+
+wait until rising_edge(clk);
+in_data <= X"021f1fb8";
+in_addr <= X"04";
+in_strobe <= '1';
+wait until rising_edge(clk);
+in_strobe <= '0';
+
 wait;
 end process;
 
 
-end Behavioral;
+end sim;
 

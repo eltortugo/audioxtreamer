@@ -70,7 +70,7 @@ Additional information can be found at
 #include <stdio.h>
 #include "ztexdev.h"
 
-#include "..\UsbDK\UsbDKWrap.h"
+#include "UsbBackend.h"
 
 #define SPRINTF_INIT( buf, maxlen )  	\
 char* buf__ = buf;			\
@@ -105,10 +105,10 @@ int ztex_get_device_info(HANDLE handle, ztex_device_info *info) {
   int64_t status;
 
   // VR 0x33: fast configuration info
-  TWO_TRIES(status, control_transfer(handle, 0xc0, 0x33, 0, 0, buf, 128, 1500));
+  /*TWO_TRIES(status, control_transfer(handle, 0xc0, 0x33, 0, 0, buf, 128, 1500));
   info->fast_config_ep = status > 0 ? buf[0] : 0;
   info->fast_config_if = status == 2 ? buf[1] : 0;
-
+  */
   // VR 0x3b: configuration data
   TWO_TRIES(status, control_transfer(handle, 0xc0, 0x3b, 0, 0, buf, 128, 1500));
   if (status < 0) status = control_transfer(handle, 0xc0, 0x3b, 0, 0, buf, 128, 1500);
@@ -192,204 +192,6 @@ int ztex_get_fpga_config(HANDLE handle) {
   TWO_TRIES(status, control_transfer(handle, 0xc0, 0x30, 0, 0, buf, 16, 1500));
   return status < 0 ? (int)status : status == 0 ? -255 : buf[0] == 0 ? 1 : 0;
 }
-
-#if defined(unix) || defined(_unix)
-#define FILE_EXISTS(fn) access(fn,R_OK)
-#else
-// the ugly method for ugly windows
-#define DIRSEP "\\"
-int FILE_EXISTS(const char* fn) {
-  FILE *f = fopen(fn, "rb");
-  if (!f) return -1;
-  fclose(f);
-  return 0;
-}
-#endif
-
-// ******* ztex_find_bitstream *************************************************
-/** Search for bitstream at standard locations.
-@param info device information, used for determining locations of the SDK examples, ignored if NULL
-@param path additional path to search, ignored if NULL
-@param name without suffix '.bit'
-@return the file name or NULL no file found
-*/
-char* ztex_find_bitstream(const ztex_device_info *info, const char *path, const char* name) {
-  char *fn = (char*)malloc(256);
-  if (!fn)  return NULL;  // out of memory, should not occur
-  int status = -1;
-
-  if (snprintf(fn, 256, "%s.bit", name) > 0)
-    status = FILE_EXISTS(fn);
-
-  if ((status<0) && path && (snprintf(fn, 256, "%s" DIRSEP "%s.bit", path, name) > 0))
-    status = FILE_EXISTS(fn);
-
-  return fn;
-}
-
-
-// ******* ztex_upload_bitstream ***********************************************
-/** Upload bitstream to volatile memory.
-* @param sbuf string buffer for error messages
-* @param sbuflen length of the string buffer
-* @param handle device handle
-* @param info device information, used for determining high speed configuration settings, ignored if NULL
-* @param fd File to read from. I/O errors are ignored.
-* @param bs 0: disable bit swapping, 1: enable bit swapping, all other values: automatic detection of bit order.
-* @return -1 if an error occurred, otherwise 0. Error messages are printed to sbuf.
-*/
-/*int ztex_upload_bitstream(HANDLE handle, const ztex_device_info *info, FILE *fd, int bs) {
-#define EP0_TRANSACTION_SIZE 2048
-#define BUF_SIZE 32768
-#define BUFS_SIZE 2048
-  uint8_t *bufs[BUFS_SIZE]; 	// up to 64MB
-  uint8_t *buf;
-  int status, size = 0, bufs_idx, buf_idx = BUF_SIZE;
-
-  if (bs > 1) bs = -1;
-  // read bitstream
-  for (bufs_idx = 0; (bufs_idx<BUFS_SIZE) && (buf_idx == BUF_SIZE); bufs_idx++) {
-    buf = (uint8_t*)malloc(BUF_SIZE);
-    bufs[bufs_idx] = buf;
-    if (buf == NULL) {
-      return -1;
-    }
-    // prepend 512 bytes dummy data
-    if (bufs_idx == 0) {
-      buf_idx = 512;
-      ZeroMemory(buf, 512);
-    }
-    else {
-      buf_idx = 0;
-    }
-
-    do {
-      status = (int)fread(buf + buf_idx, 1, BUF_SIZE - buf_idx, fd);
-      if (status > 0) {
-        size += status;
-        buf_idx += status;
-      }
-    } while ((buf_idx<BUF_SIZE) && (status>0));
-    if ((buf_idx<BUF_SIZE) && (buf_idx % 64 == 0)) {
-      buf_idx++;		// append a dummy byte for proper end of transfer detection
-    }
-
-    // detect bit order
-    if (bs<0) {
-      for (int i = 0; (bs<0) && (i<buf_idx - 3); i++) {
-        if ((buf[i] == 0xaa) && (buf[i + 1] == 0x99) && (buf[i + 2] == 0x55) && (buf[i + 3] == 0x66))
-          bs = 1;
-        if ((buf[i] == 0x55) && (buf[i + 1] == 0x99) && (buf[i + 2] == 0xaa) && (buf[i + 3] == 0x66))
-          bs = 0;
-      }
-      if (bs<0) {
-        bs = 0;
-      }
-    }
-    if (bs > 0) {
-      for (int i = 0; i<buf_idx; i++) {
-        char b = buf[i];
-        buf[i] = ((b & 128) >> 7) |
-          ((b & 64) >> 5) |
-          ((b & 32) >> 3) |
-          ((b & 16) >> 1) |
-          ((b & 8) << 1) |
-          ((b & 4) << 3) |
-          ((b & 2) << 5) |
-          ((b & 1) << 7);
-      }
-    }
-  }
-
-  if (size < 1024 || size % 64 == 0) {
-    free(bufs[0]);
-    return -1;
-  }
-
-  status = -1;
-  int claimed_if = -1;
-  for (int tries = 0; (status<0) && (tries<5); tries++) {
-    // choose EP and claim interface if necessary
-    int ep = ((tries<2) && (info != NULL)) ? (info->fast_config_ep & 127) : 0;
-    //printf("Try %d: EP=%d  \n",try,ep);
-    if ((ep>0) && (info->fast_config_if != claimed_if)) {
-      claimed_if = info->fast_config_if;
-    }
-
-    // reset FPGA
-    TWO_TRIES(status, (int)control_transfer(handle, 0x40, 0x31, 0, 0, NULL, 0, 1500));
-
-    // init FPGA configuration
-    if (ep>0) {
-      TWO_TRIES(status, (int)control_transfer(handle, 0x40, 0x34, 0, 0, NULL, 0, 1500));
-      if (status < 0) {
-        break;
-      }
-    }
-
-    // transfer data
-    status = 0;
-    for (int i = 0; (status >= 0) && (i<bufs_idx); i++) {
-      int j = i == (bufs_idx - 1) ? buf_idx : BUF_SIZE;
-      int k;
-      buf = bufs[i];
-      if (ep>0) {
-        while ((status >= 0) && (j > 0)) {
-          TWO_TRIES(status, (int)bulk_transfer(handle, ep, buf, j, &k, nullptr, 2000));
-          if (status<0) {
-          }
-          else if (k<1) {
-            status = -1;
-          }
-          else {
-            buf += k;
-            j -= k;
-          }
-        }
-      }
-      else {
-        for (int k = 0; (status >= 0) && (k<j); k += EP0_TRANSACTION_SIZE) {
-          int l = j - k < EP0_TRANSACTION_SIZE ? j - k : EP0_TRANSACTION_SIZE;
-          TWO_TRIES(status, (int)control_transfer(handle, 0x40, 0x32, 0, 0, buf + k, l, 1500));
-          if (status<0) {
-          }
-          else if (status != l) {
-            status = -1;
-          }
-        }
-      }
-    }
-
-    // finish FPGA configuration
-    if (ep>0) {
-      TWO_TRIES(status, (int)control_transfer(handle, 0x40, 0x35, 0, 0, NULL, 0, 1500));
-    }
-
-    // check configuration state
-    status = ztex_get_fpga_config(handle);
-    if (status < 0) {
-      status = -1;
-      break;
-    }
-    if (status == 0) {
-      status = -1;
-    }
-    else {
-      status = 0;
-    }
-  }
-
-  if (claimed_if >= 0) {
-    //libusb_release_interface(handle, claimed_if);
-  }
-
-  for (int i = 0; i<bufs_idx; i++) {
-    free(bufs[i]);
-  }
-
-  return status;
-}*/
-
 
 // ******* ztex_default_gpio_ctl ***********************************************
 /**

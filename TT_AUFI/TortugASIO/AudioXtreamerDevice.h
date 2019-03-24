@@ -13,6 +13,7 @@ public:
   bool IsRunning() override;
   bool IsPresent() override;
   bool GetStatus(UsbDeviceStatus &status) override;
+  uint32_t GetSampleRate() override;
   bool ConfigureDevice() override;
   
 private:
@@ -29,7 +30,8 @@ private:
   }
 
   HANDLE hMapFile;
-  HANDLE hASIOMutex;
+  HANDLE hAsioEvent;
+  HANDLE hExtreamerEvent;
   HWND   hWnd;
   uint8_t * pStreamParams;
   uint8_t * pTxBuf;

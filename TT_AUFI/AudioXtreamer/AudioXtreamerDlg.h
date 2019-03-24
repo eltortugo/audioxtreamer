@@ -11,8 +11,8 @@
 
 
 // CAudioXtreamerDlg dialog
-template <class T>
-class CAudioXtreamerDlg : public T
+
+class CAudioXtreamerDlg : public CPropertyPage
 {
 // Construction
 public:
@@ -51,7 +51,4 @@ public:
   void OnStartStream();
   void OnStopStream();
   afx_msg void OnPaint();
-  afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
 };
-
-#include "AudioXtreamerDlg.cpp"

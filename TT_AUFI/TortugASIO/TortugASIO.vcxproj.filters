@@ -16,17 +16,8 @@
     <Filter Include="asio">
       <UniqueIdentifier>{b2cd3aeb-dbf3-42e8-9ca6-1dc1bb0e3c5a}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\ZTEX">
-      <UniqueIdentifier>{99977dbd-077e-4450-a655-93b501d24741}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\USBDk">
-      <UniqueIdentifier>{333de427-519b-4766-85e7-2e93e9cbb475}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Source Files\UsbDev">
       <UniqueIdentifier>{943b4181-64f5-4b12-a6a5-4c95401302dd}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\FX2LP">
-      <UniqueIdentifier>{12c23e0f-c0bb-41ba-bb0a-530f1a38e1e2}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source Files\AudioXtreamer">
       <UniqueIdentifier>{1f7a2deb-f620-43f0-865c-b4e91ebd5e71}</UniqueIdentifier>
@@ -57,17 +48,8 @@
     <ClInclude Include="TortugASIO.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\ZTEXDev\ztexdev.h">
-      <Filter>Source Files\ZTEX</Filter>
-    </ClInclude>
-    <ClInclude Include="..\UsbDK\UsbDKWrap.h">
-      <Filter>Source Files\USBDk</Filter>
-    </ClInclude>
     <ClInclude Include="..\UsbDev\UsbDev.h">
       <Filter>Source Files\UsbDev</Filter>
-    </ClInclude>
-    <ClInclude Include="..\FX2LP\CypressDevice.h">
-      <Filter>Source Files\FX2LP</Filter>
     </ClInclude>
     <ClInclude Include="..\..\ASIOSDK2.3\common\asio.h">
       <Filter>asio</Filter>
@@ -98,17 +80,8 @@
     <ClCompile Include="Main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\ZTEXDev\ztexdev.cpp">
-      <Filter>Source Files\ZTEX</Filter>
-    </ClCompile>
-    <ClCompile Include="..\UsbDK\UsbDKWrap.cpp">
-      <Filter>Source Files\USBDk</Filter>
-    </ClCompile>
     <ClCompile Include="..\UsbDev\UsbDev.cpp">
       <Filter>Source Files\UsbDev</Filter>
-    </ClCompile>
-    <ClCompile Include="..\FX2LP\CypressDevice.cpp">
-      <Filter>Source Files\FX2LP</Filter>
     </ClCompile>
     <ClCompile Include="..\AudioXtreamer\ASIOSettingsFile.cpp">
       <Filter>Source Files\AudioXtreamer</Filter>

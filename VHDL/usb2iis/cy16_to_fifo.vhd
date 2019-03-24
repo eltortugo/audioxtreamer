@@ -15,7 +15,7 @@ use UNISIM.VComponents.all;
 use work.common_types.all;
 ------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------
-entity usbf_to_fifo is
+entity cy16_to_fifo is
 generic(
   max_sdo_lines: positive := 32
 );
@@ -38,11 +38,11 @@ generic(
 
     valid_packet : out std_logic
     );
-end usbf_to_fifo;
+end cy16_to_fifo;
 ------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------
 
-architecture Behavioral of usbf_to_fifo is
+architecture rtl of cy16_to_fifo is
 
 signal rd_data : std_logic_vector(15 downto 0);
 
@@ -55,6 +55,9 @@ signal final_rvalid   : std_logic;
 -- RX FSM
 type rx_state_t is ( rxs_idle , rxs_cmd, rxs_rd1, rxs_rd2, rxs_rd3 );
 signal rx_state : rx_state_t;
+attribute fsm_encoding : string;
+attribute fsm_encoding of rx_state : signal is "one-hot"; 
+
 -- packet decoding
 
 constant header : slv_16 := X"55AA";
@@ -239,4 +242,4 @@ rx_fifos : for i in 0 to max_sdo_lines-1 generate
 
   end generate;
 
-end behavioral;
+end rtl;

@@ -48,13 +48,14 @@ public:
   ASIOError future(long selector, void *opt);
   ASIOError outputReady();
 
-  void Switch(uint32_t rxSampleSize, uint8_t *rxBuff, uint32_t txSampleSize, uint8_t *txBuff) override;
+  bool Switch(uint32_t timeout, uint32_t rxSampleSize, uint8_t *rxBuff, uint32_t txSampleSize, uint8_t *txBuff) override;
   void AllocBuffers(uint32_t rxSize, uint8_t *&rxBuff, uint32_t txSize, uint8_t *&txBuff) override;
   void FreeBuffers(uint8_t *&rxBuff, uint8_t *&txBuff) override;
   void DeviceStopped(bool error) override;
+  void SampleRateChanged() override;
 
   double samplePosition;
-  double sampleRate;
+
   ASIOTime asioTime;
   ASIOTimeStamp theSystemTime;
 
@@ -77,7 +78,7 @@ public:
   long activeInputs;
   long activeOutputs;
   long buffIdx;
-  long milliSeconds;
+
   volatile bool active, started;
   char errorMessage[128];
   bool timeInfoMode, tcRead;

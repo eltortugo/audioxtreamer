@@ -1,10 +1,11 @@
 #pragma once
 
 #include "..\UsbDev\UsbDev.h"
+#include "resource.h"
 #include "ASIOSettings.h"
 
-template <class T>
-class ASIOSettingsDlg :  public T
+
+class ASIOSettingsDlg :  public CPropertyPage
 {
 public:
 #ifdef AFX_DESIGN_TIME
@@ -24,19 +25,25 @@ public:
 private:
   uint16_t mSRvals[16];
   uint32_t mSRacc;
-  uint32_t mSRLast;
-  uint8_t mSRidx; 
+  uint32_t mLastSR;
+  int mIns;
+  int mOuts;
+  int mSamples;
+  int mFifo;
+  uint8_t mSRidx;
 
 protected:
   DECLARE_MESSAGE_MAP()
   afx_msg void OnHScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar);
+  afx_msg void OnCbnSelchangeChannels();
   afx_msg void OnShowWindow( BOOL bShow, UINT nStatus );
 
   typedef enum { SCSamples, SCFifo, SCBoth } SCType;
   void UpdateRanges(SCType type);
 public:
-  virtual BOOL OnInitDialog();
-  virtual void DoDataExchange(CDataExchange* pDX);
+  BOOL OnInitDialog() override;
+  void DoDataExchange(CDataExchange* pDX) override;
+
 
   CComboBox mListIns;
   CComboBox mListOuts;
@@ -45,7 +52,9 @@ public:
   CSliderCtrl mSliderFifo;
 private:
   CProgressCtrl mProgressFifo;
+public:
+  virtual void OnOK();
 };
 
-#include "SettingsDlg.cpp"
+
 

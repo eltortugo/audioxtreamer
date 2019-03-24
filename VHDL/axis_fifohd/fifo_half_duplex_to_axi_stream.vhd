@@ -25,7 +25,7 @@ entity s_axis_to_w_fifo is
     pktend: out std_logic;
 
     s_axis_tvalid: in std_logic;
-    --s_axis_tlast : in std_logic;
+    s_axis_tlast : in std_logic;
     s_axis_tready: out std_logic;
     s_axis_tdata : in STD_LOGIC_VECTOR(DATA_WIDTH-1 downto 0)
   );
@@ -39,16 +39,8 @@ architecture rtl of s_axis_to_w_fifo is
   signal full_sig: std_logic;
   signal pending_wr: std_logic;
   signal data_reg : std_logic_vector(15 downto 0);
+  signal tlast_reg : std_logic;
   signal tready: std_logic;
-
-  -- logic analyzer
-  attribute mark_debug : string;
-  attribute keep : string;
-  attribute mark_debug of tx_full    : signal is "true";
-  attribute mark_debug of tx_req      : signal is "true";
-  attribute mark_debug of tx_wr       : signal is "true";
-  attribute mark_debug of tx_grant    : signal is "true";
-  attribute mark_debug of tx_data     : signal is "true";
 
 begin
   full_sig <= tx_grant and not tx_full;
@@ -56,7 +48,7 @@ begin
   begin
     if rising_edge(clk) then
       full_reg <= full_sig;
-      
+
       if reset = '1' then
         fifo_wr <= '0';
       elsif full_reg = '1' and full_sig = '1' then
@@ -69,6 +61,7 @@ begin
 
       if s_axis_tvalid = '1' and tready = '1' then
         data_reg <= s_axis_tdata;
+        tlast_reg <= s_axis_tlast;
       end if;
 
       if reset = '1' then
@@ -78,7 +71,7 @@ begin
       elsif pending_wr = '1' and fifo_wr = '1' then
         pending_wr <= '0';
       end if;
-      
+
       if reset = '1' then
         tready <= '1';
       elsif tready = '1' and s_axis_tvalid = '1' then
@@ -92,18 +85,20 @@ begin
         tready <= '1';
       end if;
 
+      pktend  <= '1';
       if reset = '1' then
         tx_data <= X"CDCD";
       elsif pending_wr = '1' and fifo_wr = '1' then
         tx_data <=  data_reg;
+        pktend  <=  not tlast_reg; 
       elsif pending_wr = '0' and s_axis_tvalid = '1' and ( fifo_wr = '0' or full_sig = '1' ) then
         tx_data <=  s_axis_tdata;
+        pktend  <=  not s_axis_tlast;
       end if;
     end if;
   end process;
   s_axis_tready <= tready;
   tx_wr <= fifo_wr;
   tx_req <= s_axis_tvalid or fifo_wr or pending_wr;
-  pktend <= '1'; --when s_axis_tlast = '1' and tx_full = '0' and tx_grant = '1' else '1';
 
 end rtl;

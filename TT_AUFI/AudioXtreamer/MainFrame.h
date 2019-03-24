@@ -1,62 +1,46 @@
 #pragma once
 #include <afxtoolbarimages.h>
+#include "ASIOSettingsFile.h"
+#include "PropertySheetDlg.h"
+
+
+enum State;
+enum IconState;
+class UsbDevice;
 class MainFrame :
   public CFrameWnd
 {
 public:
-  MainFrame();
+  MainFrame(UsbDevice & dev);
   ~MainFrame();
- 
-  DECLARE_DYNCREATE(MainFrame)
+
   afx_msg void OnTimer(UINT_PTR nIDEvent);
   afx_msg int OnCreate(LPCREATESTRUCT lpCreateStruct);
   afx_msg LRESULT OnTrayNotification(WPARAM wParam, LPARAM lParam);
   afx_msg LRESULT XtreamerMessage(WPARAM wp, LPARAM lp);
-
-  enum State{Stopped, Started, Active };
-  void SetState(State st);
+  afx_msg void OnAudioxtreamerOpen();
+  afx_msg void OnUpdateAudioxtreamerOpen(CCmdUI *pCmdUI);
+  afx_msg void OnAudioxtreamerQuit();
+  afx_msg void OnUpdateAudioxtreamerQuit(CCmdUI *pCmdUI);
 
   DECLARE_MESSAGE_MAP()
 
 protected:
+  INT_PTR OpenControlPanel(bool pause);
 
+  void NextState(enum State newState);
+  void SetIconState(enum IconState st);
+
+  ASIOSettingsFile mIniFile;
+  UsbDevice & mDevice;
+  enum State mState;
+
+  PropertySheetDlg mPropertySheet;
   CPngImage m_pngImage;
   CBitmap  m_BitmapTrayIcon;
   UINT_PTR m_nTimerID;
 
 public:
-  afx_msg void OnDestroy();  
-};
-
-class ProperySheetDlg : public CPropertySheet
-{
-public:
-
-  ProperySheetDlg(LPCTSTR p) : CPropertySheet(p) {}
-
-  virtual BOOL OnInitDialog();
-
-  CMenu Menu;
-  HICON mHicon;
-};
-
-class CAboutDlg : public CDialog
-{
-public:
-  CAboutDlg();
-
-  // Dialog Data
-#ifdef AFX_DESIGN_TIME
-  enum { IDD = IDD_ABOUTBOX };
-#endif
-
-protected:
-  virtual void DoDataExchange(CDataExchange * DX);    // DDX/DDV support
-
-// Implementation
-protected:
-
-public:
-
+  afx_msg void OnDestroy();
 };
 

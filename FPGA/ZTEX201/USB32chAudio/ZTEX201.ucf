@@ -10,14 +10,14 @@ INST "FLAG*" TNM = cy_inputs;
 INST "DIO*" TNM = cy_outputs;
 INST "SL*" TNM = cy_outputs;
 TIMEGRP "cy_inputs" OFFSET = IN 9.8333 ns VALID 9 ns BEFORE "cy_clk" RISING;
-TIMEGRP "cy_outputs" OFFSET = OUT 13 ns AFTER "cy_clk" RISING;
+TIMEGRP "cy_outputs" OFFSET = OUT 11 ns AFTER "cy_clk" RISING;
 
 
 # use the 96Khz freq for timing closure but expect it to be half 
 NET "ymh_clk" TNM_NET = "ymh_clk";
 TIMESPEC TS_f256_clk = PERIOD "ymh_clk" 24.576 MHz HIGH 50%;
 
-TIMESPEC TS_XDOMAINS_iistousb = FROM "clock_gen_dcm_out" TO "cy_clk" TIG;
+TIMESPEC TS_XDOMAINS_iistousb = FROM "ymh_clk" TO "cy_clk" TIG;
 TIMESPEC "TS_XDOMAINS_usbtoiis" = FROM "cy_clk" TO "ymh_clk" TIG;
 
 NET "ARESET"	LOC = "R3" |IOSTANDARD = LVCMOS33 ;		# PA7/FLAGD/SLCS#
@@ -47,11 +47,21 @@ NET "SLOEn"  LOC = "B10" |IOSTANDARD = LVCMOS33 |DRIVE = 12 ;		# PA2
 NET "FIFOADDR0"  LOC = "T11" |IOSTANDARD = LVCMOS33 |DRIVE = 12 ;	# PA4
 NET "FIFOADDR1"  LOC = "N11" |IOSTANDARD = LVCMOS33 |DRIVE = 12 ;	# PA5
 NET "PKTEND"  LOC = "T5" |IOSTANDARD = LVCMOS33 |DRIVE = 12 ;		# PA6
+
+NET "FLAG*" PULLDOWN = true;
+NET "ymh_word_clk" PULLDOWN = true;
+
 # LSI signals
 NET "lsi_miso"	LOC = "P5" |IOSTANDARD = LVCMOS33 ;		# PC4/GPIFADR4
 NET "lsi_mosi"	LOC = "L8" |IOSTANDARD = LVCMOS33 ;		# PC5/GPIFADR5
 NET "lsi_clk"	LOC = "L7" |IOSTANDARD = LVCMOS33 ;		# PC6/GPIFADR6
 NET "lsi_stop"	LOC = "R5" |IOSTANDARD = LVCMOS33 ;		# PC7/GPIFADR7
+
+# GPIO
+#NET "gpio_clk"	LOC = "N12" | IOSTANDARD = LVCMOS33 ;		# PC1/GPIFADR1
+#NET "gpio_dir"	LOC = "P12" | IOSTANDARD = LVCMOS33 ;		# PC2/GPIFADR2
+NET "gpio_dat"	LOC = "N5" | IOSTANDARD = LVCMOS33 | PULLUP;	# PC3/GPIFADR3
+
 # IIS IFC
 
 #NET "IO_A<0>"	LOC = "T12" | IOSTANDARD = LVCMOS33 ;		# A3 / T12~IO_L52N_M1DQ15_1

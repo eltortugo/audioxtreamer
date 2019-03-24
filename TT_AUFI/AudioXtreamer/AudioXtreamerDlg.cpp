@@ -3,8 +3,8 @@
 //
 
 #include "stdafx.h"
-#include "resource.h"
-#include "MainFrame.h"
+#include "AudioXtreamerDlg.h"
+
 
 
 #ifdef _DEBUG
@@ -13,46 +13,45 @@
 
 
 
-template <class T>
-CAudioXtreamerDlg<T>::CAudioXtreamerDlg(UsbDevice & device, ASIOSettings::Settings &info)
-	: T(IDD_DLG_DEVEL)
+
+CAudioXtreamerDlg::CAudioXtreamerDlg(UsbDevice & device, ASIOSettings::Settings &info)
+	: CPropertyPage(IDD_DLG_DEVEL)
   , mCheckOpenDevice(FALSE)
   , mDevice (device)
 {
   m_hIcon = LoadIcon(AfxGetInstanceHandle(), MAKEINTRESOURCE(IDI_AXG));
 }
 
-template <class T>
-CAudioXtreamerDlg<T>::~CAudioXtreamerDlg()
+
+CAudioXtreamerDlg::~CAudioXtreamerDlg()
 {
 
 }
 
-template <class T>
-void CAudioXtreamerDlg<T>::DoDataExchange(CDataExchange * DX)
+
+void CAudioXtreamerDlg::DoDataExchange(CDataExchange * DX)
 {
-  CDialog::DoDataExchange(DX);
+  __super::DoDataExchange(DX);
   DDX_Check( DX, IDC_CHECK1, mCheckOpenDevice);
 }
 
 
-BEGIN_TEMPLATE_MESSAGE_MAP(CAudioXtreamerDlg, T, T)
+BEGIN_MESSAGE_MAP(CAudioXtreamerDlg, CPropertyPage)
 	ON_WM_SYSCOMMAND()
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
-  ON_BN_CLICKED(IDC_CHECK1, &CAudioXtreamerDlg<T>::OnBnClickedCheck1)
-  ON_BN_CLICKED(IDC_BUTTON1, &CAudioXtreamerDlg<T>::OnOpen)
-  ON_BN_CLICKED(IDC_BUTTON2, &CAudioXtreamerDlg<T>::OnClose)
-  ON_BN_CLICKED(IDC_BUTTON3, &CAudioXtreamerDlg<T>::OnSendAsync)
-  ON_BN_CLICKED(IDC_BUTTON4, &CAudioXtreamerDlg<T>::OnRecvAsync)
-  ON_BN_CLICKED(IDC_BUTTON5, &CAudioXtreamerDlg<T>::OnStartStream)
-  ON_BN_CLICKED(IDC_BUTTON6, &CAudioXtreamerDlg<T>::OnStopStream)
+  ON_BN_CLICKED(IDC_CHECK1,  &CAudioXtreamerDlg::OnBnClickedCheck1)
+  ON_BN_CLICKED(IDC_BUTTON1, &CAudioXtreamerDlg::OnOpen)
+  ON_BN_CLICKED(IDC_BUTTON2, &CAudioXtreamerDlg::OnClose)
+  ON_BN_CLICKED(IDC_BUTTON3, &CAudioXtreamerDlg::OnSendAsync)
+  ON_BN_CLICKED(IDC_BUTTON4, &CAudioXtreamerDlg::OnRecvAsync)
+  ON_BN_CLICKED(IDC_BUTTON5, &CAudioXtreamerDlg::OnStartStream)
+  ON_BN_CLICKED(IDC_BUTTON6, &CAudioXtreamerDlg::OnStopStream)
   ON_WM_PAINT()
-  ON_WM_SYSCOMMAND()
 END_MESSAGE_MAP()
 
-template <class T>
-BOOL CAudioXtreamerDlg<T>::OnCommand(WPARAM wParam, LPARAM lParam)
+
+BOOL CAudioXtreamerDlg::OnCommand(WPARAM wParam, LPARAM lParam)
 {
   UNREFERENCED_PARAMETER(lParam);
 
@@ -68,14 +67,13 @@ BOOL CAudioXtreamerDlg<T>::OnCommand(WPARAM wParam, LPARAM lParam)
   case IDC_BUTTON6: OnStopStream(); return TRUE;
   }
 
-  return T::OnCommand(wParam, lParam);
+  return __super::OnCommand(wParam, lParam);
 }
 
 // CAudioXtreamerDlg message handlers
-template <class T>
-BOOL CAudioXtreamerDlg<T>::OnInitDialog()
+BOOL CAudioXtreamerDlg::OnInitDialog()
 {
-	T::OnInitDialog();
+	__super::OnInitDialog();
 
 	// Add "About..." menu item to system menu.
 
@@ -107,27 +105,7 @@ BOOL CAudioXtreamerDlg<T>::OnInitDialog()
 }
 
 
-template <class T>
-void CAudioXtreamerDlg<T>::OnSysCommand(UINT nID, LPARAM lParam)
-{
-  if ((nID & 0xFFF0) == IDM_ABOUTBOX)
-  {
-    CAboutDlg dlgAbout;
-    dlgAbout.DoModal();
-  }
-  else
-  {
-    T::OnSysCommand(nID, lParam);
-  }
-}
-
-
-// If you add a minimize button to your dialog, you will need the code below
-//  to draw the icon.  For MFC applications using the document/view model,
-//  this is automatically done for you by the framework.
-
-template <class T>
-void CAudioXtreamerDlg<T>::OnPaint()
+void CAudioXtreamerDlg::OnPaint()
 {
 
 	if (IsIconic())
@@ -150,28 +128,23 @@ void CAudioXtreamerDlg<T>::OnPaint()
 	}
 	else
 	{
-		T::OnPaint();
+		__super::OnPaint();
 	}
 }
 
 // The system calls this function to obtain the cursor to display while the user drags
 //  the minimized window.
-template <class T>
-HCURSOR CAudioXtreamerDlg<T>::OnQueryDragIcon()
+HCURSOR CAudioXtreamerDlg::OnQueryDragIcon()
 {
 	return static_cast<HCURSOR>(m_hIcon);
 }
 
-
-
-template <class T>
-void CAudioXtreamerDlg<T>::OnBnClickedCheck1()
+void CAudioXtreamerDlg::OnBnClickedCheck1()
 {
   UpdateData(TRUE);
 }
 
-template <class T>
-void CAudioXtreamerDlg<T>::OnOpen()
+void CAudioXtreamerDlg::OnOpen()
 {
   if (mDevice.Open())
   {
@@ -182,8 +155,7 @@ void CAudioXtreamerDlg<T>::OnOpen()
   }
 }
 
-template <class T>
-void CAudioXtreamerDlg<T>::OnClose()
+void CAudioXtreamerDlg::OnClose()
 {
   if ( mDevice.Close()){
     HWND hwnd = GetDlgItem(IDC_BUTTON1)->GetSafeHwnd();
@@ -193,26 +165,23 @@ void CAudioXtreamerDlg<T>::OnClose()
   }
 }
 
-template <class T>
-void CAudioXtreamerDlg<T>::OnSendAsync()
+void CAudioXtreamerDlg::OnSendAsync()
 {
   //if (mDevice) mDevice->SendAsync(512,0);
 }
 
-template <class T>
-void CAudioXtreamerDlg<T>::OnRecvAsync()
+void CAudioXtreamerDlg::OnRecvAsync()
 {
   //if (mDevice) mDevice->RecvAsync(512,0);
 }
 
-template <class T>
-void CAudioXtreamerDlg<T>::OnStartStream()
+void CAudioXtreamerDlg::OnStartStream()
 {
   mDevice.Start();
 }
 
-template <class T>
-void CAudioXtreamerDlg<T>::OnStopStream()
+
+void CAudioXtreamerDlg::OnStopStream()
 {
   mDevice.Stop(true);
 }

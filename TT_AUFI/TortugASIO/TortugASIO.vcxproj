@@ -22,20 +22,20 @@
     <ProjectGuid>{23E68BD6-2338-4647-B901-4157359E0E90}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>TortugASIO</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
     <UseOfMfc>false</UseOfMfc>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
     <UseOfMfc>false</UseOfMfc>
@@ -43,14 +43,14 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
     <UseOfMfc>false</UseOfMfc>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
     <UseOfMfc>false</UseOfMfc>
@@ -76,13 +76,11 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
     <IncludePath>.;..;..\..\asiosdk2.3\common;..\..\libs;$(IncludePath)</IncludePath>
-    <OutDir>$(SolutionDir)\Release\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <IncludePath>.;..;..\..\asiosdk2.3\common;..\..\libs;$(IncludePath)</IncludePath>
     <TargetName>$(ProjectName)x64</TargetName>
-    <OutDir>$(SolutionDir)$(Platform)\Release\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -104,9 +102,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>winmm.lib;mfcs140ud.lib;msvcrtd.lib;%(AdditionalDependencies);</AdditionalDependencies>
       <ModuleDefinitionFile>TortugASIO.def</ModuleDefinitionFile>
-      <IgnoreSpecificDefaultLibraries>mfcs140ud.lib;msvcrtd.lib;</IgnoreSpecificDefaultLibraries>
     </Link>
     <ProjectReference />
   </ItemDefinitionGroup>
@@ -121,9 +117,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>winmm.lib;mfcs140ud.lib;msvcrtd.lib;%(AdditionalDependencies);</AdditionalDependencies>
       <ModuleDefinitionFile>TortugASIO.def</ModuleDefinitionFile>
-      <IgnoreSpecificDefaultLibraries>mfcs140ud.lib;msvcrtd.lib;</IgnoreSpecificDefaultLibraries>
     </Link>
     <ProjectReference />
   </ItemDefinitionGroup>
@@ -142,9 +136,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>winmm.lib;mfcs140u.lib;msvcrt.lib;%(AdditionalDependencies);</AdditionalDependencies>
       <ModuleDefinitionFile>TortugASIO.def</ModuleDefinitionFile>
-      <IgnoreSpecificDefaultLibraries>mfcs140u.lib;msvcrt.lib;</IgnoreSpecificDefaultLibraries>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -162,9 +154,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>winmm.lib;mfcs140u.lib;msvcrt.lib;%(AdditionalDependencies);</AdditionalDependencies>
       <ModuleDefinitionFile>TortugASIO.def</ModuleDefinitionFile>
-      <IgnoreSpecificDefaultLibraries>mfcs140u.lib;msvcrt.lib;</IgnoreSpecificDefaultLibraries>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -175,10 +165,7 @@
     <ClInclude Include="..\..\ASIOSDK2.3\common\asiosys.h" />
     <ClInclude Include="..\..\ASIOSDK2.3\common\combase.h" />
     <ClInclude Include="..\..\ASIOSDK2.3\common\iasiodrv.h" />
-    <ClInclude Include="..\FX2LP\CypressDevice.h" />
     <ClInclude Include="..\UsbDev\UsbDev.h" />
-    <ClInclude Include="..\UsbDK\UsbDKWrap.h" />
-    <ClInclude Include="..\ZTEXDev\ztexdev.h" />
     <ClInclude Include="..\AudioXtreamer\ASIOSettings.h" />
     <ClInclude Include="..\AudioXtreamer\ASIOSettingsFile.h" />
     <ClInclude Include="AudioXtreamerDevice.h" />
@@ -207,9 +194,6 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="..\UsbDev\UsbDev.cpp" />
-    <ClCompile Include="..\UsbDK\UsbDKWrap.cpp" />
-    <ClCompile Include="..\ZTEXDev\ztexdev.cpp" />
-    <ClCompile Include="..\FX2LP\CypressDevice.cpp" />
     <ClCompile Include="..\AudioXtreamer\ASIOSettings.cpp" />
     <ClCompile Include="..\AudioXtreamer\ASIOSettingsFile.cpp" />
     <ClCompile Include="AudioXtreamerDevice.cpp" />

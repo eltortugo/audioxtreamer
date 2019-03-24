@@ -6,7 +6,8 @@
 AudioXtreamerDevice::AudioXtreamerDevice(UsbDeviceClient & client, ASIOSettings::Settings & params)
   : UsbDevice(client, params)
   , hMapFile(NULL)
-  , hASIOMutex(NULL)
+  , hAsioEvent(NULL)
+  , hExtreamerEvent(NULL)
   , hWnd(NULL)
   , pStreamParams(nullptr)
   , pRxBuf(nullptr)
@@ -58,7 +59,7 @@ AudioXtreamerDevice::Open()
 
   pStreamParams = (uint8_t*)MapViewOfFile(hMapFile, FILE_MAP_ALL_ACCESS, 0, 0, (1 << 16));
   pRxBuf = (uint8_t*)MapViewOfFile(hMapFile, FILE_MAP_READ, 0, (1 << 16), (1 << 16));
-  pTxBuf = (uint8_t*)MapViewOfFile(hMapFile, FILE_MAP_WRITE, 0, (2 << 16) , (1 << 16));
+  pTxBuf = (uint8_t*)MapViewOfFile(hMapFile, FILE_MAP_WRITE, 0, (2 << 16) , 0); //till the end
 
   if (pStreamParams == nullptr || pTxBuf == nullptr || pTxBuf == nullptr)
     _tprintf(TEXT("Could not map view of file (%d).\n"), GetLastError());
@@ -71,7 +72,7 @@ error:
   unmap(pRxBuf);
   unmap(pStreamParams);
 
-  unhandle(hASIOMutex);
+  unhandle(hAsioEvent);
   unhandle(hMapFile);
   return false;
 }
@@ -81,10 +82,11 @@ bool
 AudioXtreamerDevice::Start()
 {
   LOG0("AudioXtreamerDevice::Start");
+  
+  hAsioEvent = OpenEvent(SYNCHRONIZE | EVENT_MODIFY_STATE, FALSE, szNameAsioEvent);
+  hExtreamerEvent = OpenEvent(SYNCHRONIZE, FALSE, szNameXtreamerEvent);
 
-  hASIOMutex = OpenMutex(SYNCHRONIZE, FALSE, szNameMutex);
-
-  if (hASIOMutex == NULL || SendMessage(hWnd, WM_XTREAMER, 2, 0) == 0)
+  if (hAsioEvent == NULL || hExtreamerEvent == NULL || SendMessage(hWnd, WM_XTREAMER, 2, 0) == 0)
     return false;
 
 
@@ -97,7 +99,7 @@ AudioXtreamerDevice::Start()
 
   hth_Worker = (HANDLE)_beginthread(StaticWorkerThread, 0, this);
   if (hth_Worker != INVALID_HANDLE_VALUE) {
-    ::SetThreadPriority(hth_Worker, THREAD_PRIORITY_TIME_CRITICAL);
+    ::SetThreadPriority(hth_Worker, THREAD_PRIORITY_HIGHEST);
     return true;
   }
   return false;
@@ -137,7 +139,8 @@ AudioXtreamerDevice::Close()
   unmap(pRxBuf);
   unmap(pStreamParams);
 
-  unhandle(hASIOMutex);
+  unhandle(hAsioEvent);
+  unhandle(hExtreamerEvent);
   unhandle(hMapFile);
   return true;
 }
@@ -146,6 +149,11 @@ AudioXtreamerDevice::Close()
 bool AudioXtreamerDevice::GetStatus(UsbDeviceStatus &status)
 {
   return false;
+}
+
+uint32_t AudioXtreamerDevice::GetSampleRate()
+{
+  return uint32_t( SendMessage(hWnd, WM_XTREAMER, 4, 0));
 }
 
 bool AudioXtreamerDevice::ConfigureDevice()
@@ -174,37 +182,42 @@ AudioXtreamerDevice::main()
   bool error = false;
   mExitHandle = CreateEvent(NULL, TRUE, FALSE, NULL);
   ResetEvent(mExitHandle);
-  //once started, wait until we acquire the mutex, meaning there is data to be sent to switch of asio
+  //once started, fire the event to tell audioextreamer we are alive
+  //SetEvent(hAsioEvent);
 
   while (WaitForSingleObject(mExitHandle, 0) != WAIT_OBJECT_0)
   {
-
-    DWORD result = WaitForSingleObject(hASIOMutex, 1000);
-
+    DWORD result = WaitForSingleObject(hExtreamerEvent, 1000);
     switch (result)
     {
     case WAIT_OBJECT_0: {
         ASIOSettings::StreamInfo *info = (ASIOSettings::StreamInfo *)pStreamParams;
-        devClient.Switch(info->RxStride, pRxBuf + info->RxOffset, info->TxStride, pTxBuf + info->TxOffset);
+        if (info->Flags & 0x2)
+          devClient.SampleRateChanged();
+        else
+          devClient.Switch(0, info->RxStride, pRxBuf + info->RxOffset, info->TxStride, pTxBuf + info->TxOffset);
 
         info->Flags |= 0x1; //im alive
-        ReleaseMutex(hASIOMutex);
+        SetEvent(hAsioEvent);
 
     } break;
 
     case WAIT_TIMEOUT: // the driver is not present so there is probably some config going on, it should be abandonend soon for a restart.
       break;
-    case WAIT_ABANDONED: //now I am the owner of an orphan, release it and leave
-      ReleaseMutex(hASIOMutex);
+    case WAIT_ABANDONED:
+
     case WAIT_FAILED:
       error = true;
       break;
     }
     if (error)
       break;
+
+    
   }
 
-  unhandle(hASIOMutex);
+  unhandle(hAsioEvent);
+  unhandle(hExtreamerEvent);
 
   CloseHandle(mExitHandle);
   mExitHandle = INVALID_HANDLE_VALUE;

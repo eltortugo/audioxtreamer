@@ -6,7 +6,7 @@ class CypressDevice : public UsbDevice
 {
 public:
   explicit CypressDevice(UsbDeviceClient & client, ASIOSettings::Settings & params);
-  ~CypressDevice();
+  ~CypressDevice() override;
 
   bool Open() override;
   bool Start() override;
@@ -16,7 +16,9 @@ public:
   bool IsPresent() override;
 
   bool GetStatus(UsbDeviceStatus &status) override;
+  uint32_t GetSampleRate() override;
   bool ConfigureDevice() override { return false; }
+  
 
 private:
 
@@ -31,12 +33,14 @@ private:
       inst->main();
   }
 
+
   uint8_t mDefOutEP;
   uint8_t mDefInEP;
   uint8_t* mBitstream;
-  uint32_t mRsize;
+  uint32_t mResourceSize;
 
   HANDLE mDevHandle;
+  HANDLE mFileHandle;
   HANDLE hSem;
   UsbDeviceStatus mDevStatus;
 };

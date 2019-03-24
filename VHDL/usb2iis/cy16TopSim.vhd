@@ -40,11 +40,11 @@ end TopLevelSim;
 
 architecture Behavioral of TopLevelSim is
 
-constant nr_outputs: natural := 32;
-constant nr_inputs: natural := 32;
+constant nr_outputs: natural := 18;
+constant nr_inputs: natural := 24;
 
-constant dut_nr_outputs: natural := 32;
-constant dut_nr_inputs: natural := 32;
+constant dut_nr_outputs: natural := 24;
+constant dut_nr_inputs: natural := 24;
 
 constant payload_size : natural := (3*nr_outputs)+4;
 type payload is array (0 to  payload_size-1) of std_logic_vector(7 downto 0);
@@ -71,20 +71,20 @@ constant test_data: payload :=
   ,X"AF", X"BF", X"CF" --ch16
   ,X"D0", X"E0", X"F0" --ch17
   ,X"D1", X"E1", X"F1" --ch18
-  ,X"D2", X"E2", X"F2" --ch19
-  ,X"D3", X"E3", X"F3" --ch20
-  ,X"D4", X"E4", X"F4" --ch21
-  ,X"D5", X"E5", X"F5" --ch22
-  ,X"D6", X"E6", X"F6" --ch23
-  ,X"D7", X"E7", X"F7" --ch24
-  ,X"D8", X"E8", X"F8" --ch25
-  ,X"D9", X"E9", X"F9" --ch26
-  ,X"DA", X"EA", X"FA" --ch27
-  ,X"DB", X"EB", X"FB" --ch28
-  ,X"DC", X"EC", X"FC" --ch29
-  ,X"DD", X"ED", X"FD" --ch30
-  ,X"DE", X"EE", X"FE" --ch31
-  ,X"DF", X"EF", X"FF" --ch32
+  --,X"D2", X"E2", X"F2" --ch19
+  --,X"D3", X"E3", X"F3" --ch20
+  --,X"D4", X"E4", X"F4" --ch21
+  --,X"D5", X"E5", X"F5" --ch22
+  --,X"D6", X"E6", X"F6" --ch23
+  --,X"D7", X"E7", X"F7" --ch24
+  --,X"D8", X"E8", X"F8" --ch25
+  --,X"D9", X"E9", X"F9" --ch26
+  --,X"DA", X"EA", X"FA" --ch27
+  --,X"DB", X"EB", X"FB" --ch28
+  --,X"DC", X"EC", X"FC" --ch29
+  --,X"DD", X"ED", X"FD" --ch30
+  --,X"DE", X"EE", X"FE" --ch31
+  --,X"DF", X"EF", X"FF" --ch32
 );
 
  
@@ -99,7 +99,7 @@ signal wr_counter: integer range 0 to payload_size -1;
 signal ft_send : std_logic_vector(15 downto 0);
 
 signal ft_nwr     : std_logic;
-signal ft_ntxe    : std_logic;
+signal tx_full    : std_logic;
 
 signal flagb      : std_logic;
 
@@ -130,10 +130,10 @@ begin
   if rising_edge(ft_clk) then
     if reset = '1' then
       ft_send <= X"EFEF";
-      wr_counter <= 0;            
+      wr_counter <= 0;
     elsif ft_nRD = '0' then
       if wr_counter = (payload_size/2-1) then
-        wr_counter <= 0 after 3 ns;        
+        wr_counter <= 0 after 3 ns;
       else
         wr_counter <= wr_counter+1 after 3 ns;
       end if;
@@ -147,7 +147,7 @@ variable f256_count : std_logic_vector(7 downto 0);
 begin
   if rising_edge(yamaha_clk) then
     if reset = '1' then
-      f256_count := (others => '0');    
+      f256_count := (others => '0');
     else
       f256_count := f256_count + X"01";
     end if;
@@ -157,48 +157,43 @@ end process;
 
 ft_data <= ft_send when ft_nOE = '0' else (others => 'Z');
 
-process (ft_clk, reset, ft_ntxe, ft_nwr)
-variable counter: natural := 0; 
---variable pending : boolean := false;
+process (ft_clk, reset, tx_full, ft_nwr)
+
+variable pending : boolean := false;
+variable delay: natural := 0;
 --variable counted : natural := 0;
 begin
   if rising_edge(ft_clk) then
     if reset = '1' then
-      counter := 0;
-      ft_ntxe <= '0';
-      --nr_writes <= '0';
+      nr_writes <= 0;
+      tx_full <= '0';
+      pending := false;
     elsif ft_nwr = '0' then
-      counter := counter +1;
+      nr_writes <= nr_writes +1;
+    end if;
+    
+    if pending = true then
+      delay := delay +1;
+    else
+      delay := 0;
     end if;
 
-    --  if counter = 39 then
-    --    if ft_nwr = '1' then
-    --      counter := 0;
-    --    else
-    --      counter := 1;
-    --    end if;
-    --  elsif ft_nwr = '0' then
-    --    counter := counter +1;
-    --    pending := false; 
-    --  end if;
-      
-    --  if pending = false then 
-    --    if ft_ntxe = '1' then
-    --      ft_ntxe <= '0';
-    --      pending := true; 
-    --    elsif counter = 38 then
-    --      ft_ntxe <= '1';
-    --    end if;
-    --  end if;
-    --end if;
+    if nr_writes = 1023 then --after 2 buffers simulate a full condition
+      tx_full <= '1';
+      pending := true;
+    end if;
+    
+    if delay = 31 then  --which takes 32 cycles to resolve
+      pending := false;
+      tx_full <= '0';
+    end if;
   end if;
-  nr_writes <= counter;
 end process;
 
-flagb <= not ft_ntxe;
+flagb <= not tx_full;
 
 inst: entity work.CY16_to_iis
---generic map( sdi_lines => dut_nr_inputs/2, sdo_lines => dut_nr_outputs/2 )--, bit_depth => 24 )
+  generic map( sdi_lines => dut_nr_inputs/2, sdo_lines => dut_nr_outputs/2 )--, bit_depth => 24 )
 port map(
 
     led(7 downto 0) => led(7 downto 0),
@@ -216,17 +211,19 @@ port map(
     
     SLRDn  => ft_nRD,
     SLOEn  => ft_nOE,
-    SLWRn   => ft_nwr,    
-        
-    ain => sd_out(11 downto 0), --loopback    
+    SLWRn   => ft_nwr,
+
+    ain => sd_out(11 downto 0), --loopback
     aout => sd_out(11 downto 0),
-    
+
     ymh_clk => yamaha_clk,
     ymh_word_clk => yamaha_word_clk,
 	 
 	 lsi_clk => '0',
 	 lsi_mosi => '0',
-	 lsi_stop => '0'
+	 lsi_stop => '0',
+   
+   gpio_dat => '0'
     );
 
 

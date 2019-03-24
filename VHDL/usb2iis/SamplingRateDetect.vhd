@@ -19,7 +19,7 @@ architecture rtl of SamplingRateDetect is
   attribute ASYNC_REG : string;
   attribute ASYNC_REG of edge_det : signal is "TRUE";
   
-  constant gate_size : natural := 480000; --10ms
+  constant gate_size : natural := 4800000; --100ms
   signal c100ms : natural range 0 to gate_size-1 := 0;
   signal pre_count : slv_16 := (others => '0');
   signal post_count : slv_16 := (others => '0');

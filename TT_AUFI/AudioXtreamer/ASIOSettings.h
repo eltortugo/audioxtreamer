@@ -36,10 +36,11 @@ namespace ASIOSettings
 #define WM_XTREAMER WM_APP + 100
 
 extern CLSID IID_TORTUGASIO_XTREAMER;
-extern LPCTSTR szNameShMem;
-extern LPCTSTR szNameMutex;
-extern LPCTSTR szNameClass;
-extern LPCTSTR szNameApp;
+extern LPCTSTR const szNameShMem;
+extern LPCTSTR const szNameAsioEvent;
+extern LPCTSTR const szNameXtreamerEvent;
+extern LPCTSTR const szNameClass;
+extern LPCTSTR const szNameApp;
 
 extern ASIOSettings::Settings theSettings;
 

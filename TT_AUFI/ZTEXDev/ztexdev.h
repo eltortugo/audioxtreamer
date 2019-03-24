@@ -93,8 +93,6 @@ int ztex_get_device_info(HANDLE handle, ztex_device_info *info);
 //int ztex_print_device_info(char* sbuf, int sbuflen, const ztex_device_info *info);
 
 int ztex_get_fpga_config(HANDLE handle);
-char* ztex_find_bitstream(const ztex_device_info *info, const char *path, const char* name);
-int ztex_upload_bitstream(HANDLE handle, const ztex_device_info *info, FILE* fd, int bs);
 
 int ztex_default_gpio_ctl (HANDLE handle, int mask, int value) ;
 int ztex_default_reset(HANDLE handle,  int leave );

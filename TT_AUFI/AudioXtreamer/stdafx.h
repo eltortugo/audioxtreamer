@@ -23,6 +23,8 @@ extern ATL::CComModule _Module;
 
 #include <stdint.h>
 #include <cfgmgr32.h>
+
+#include "setupapi.h"
 #include <usb.h>
 
 

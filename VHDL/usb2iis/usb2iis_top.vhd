@@ -37,8 +37,8 @@ use work.common_types.all;
 ------------------------------------------------------------------------------------------------------------
 entity CY16_to_IIS is
 generic(
-sdi_lines   : positive := 16;
-sdo_lines   : positive := 16
+sdi_lines   : positive := 12;
+sdo_lines   : positive := 12
 );
   Port (
     areset : in std_logic;
@@ -56,6 +56,7 @@ sdo_lines   : positive := 16
     lsi_miso : out std_logic;
     lsi_stop : in std_logic;
 
+    gpio_dat : in std_logic;
     --yamaha external clock and word clock
     ain: in std_logic_vector( 11 downto 0);
     aout: out std_logic_vector( 11 downto 0);
@@ -119,15 +120,15 @@ signal usb_reset : std_logic;
 signal io_reset : std_logic;
 signal clkgen_locked : std_logic;
 
-signal rx_data : std_logic_vector(15 downto 0);
-signal tx_data : std_logic_vector(15 downto 0);
+signal usb_rx_data : std_logic_vector(15 downto 0);
+signal usb_tx_data : std_logic_vector(15 downto 0);
 
-signal usb_rd, usb_wr, tx_req, tx_grant, usb_oe, usb_rxempty , usb_txfull : std_logic; 
+signal usb_rdn, usb_wr, tx_req, tx_grant, usb_oe, usb_oe_3s, usb_rxempty , usb_txfull : std_logic; 
 
 subtype out_data_array is slv24_array(0 to max_nr_outputs-1);
 signal out_fifo_init: std_logic;
-signal out_fifo_full : std_logic_vector(max_nr_outputs-1 downto 0);
-signal out_prog_full : std_logic_vector(max_nr_outputs-1 downto 0);
+signal out_fifo_full : std_logic_vector((max_nr_outputs/3)-1 downto 0);
+signal out_prog_full : std_logic_vector((max_nr_outputs/3)-1 downto 0);
 signal out_fifo_wr_en: std_logic;
 signal out_fifo_din : out_data_array;
 
@@ -136,6 +137,7 @@ signal rcvr_data : out_data_array;
 signal rcvr_fifo_full : std_logic;
 signal rcvr_cmd_valid : std_logic;
 
+signal tx_reset : std_logic;
 signal unlock : std_logic;
 signal is_streaming : std_logic;
 
@@ -148,13 +150,17 @@ signal rd_data_count : rd_data_count_t( 0 to max_nr_outputs-1);
 signal out_fifo_rd_data : out_data_array;
 signal out_fifo_rd_en : std_logic;
 signal out_fifo_rd : std_logic;
-signal out_fifo_empty : std_logic_vector(max_nr_outputs-1 downto 0);
+signal out_fifo_empty : std_logic_vector((max_nr_outputs/3)-1 downto 0);
 signal out_empty  : std_logic;
-signal out_fifo_min : slv_8;
-signal out_fifo_skip : slv_8;
+signal out_fifo_min : std_logic_vector(7 downto 0);
+signal out_fifo_skip : std_logic;
+signal out_fifo_skip_count : slv_16;
 signal out_fifo_stats_reset : std_logic;
 
+signal xmtr_addr : slv_16;
+signal xmtr_data : slv_16;
 
+signal in_fifo_full_count : slv_16;
 signal in_fifo_wr_full : std_logic_vector(max_nr_inputs-1 downto 0);
 signal in_fifo_wr_data: slv24_array(0 to max_nr_inputs-1);
 signal in_fifo_wr_en : std_logic;
@@ -166,6 +172,7 @@ signal in_fifo_empty : std_logic;
 
 signal in_axis_tvalid : std_logic;
 signal in_axis_tready : std_logic;
+signal in_axis_tlast  : std_logic;
 signal in_axis_tdata  : std_logic_vector(15 downto 0);
 
 signal lsi_rd_data : slv_32;
@@ -178,6 +185,11 @@ signal lsi_wr   : std_logic;
 signal reg_sr_count : slv_32;
 signal reg_debug : slv_32;
 signal reg_ch_params : slv_32;
+signal reg_payload_size : slv_16;
+
+signal ep6_isoerr_count : natural range 0 to 65535;
+signal ep6_isoerr_reg1  : std_logic ;
+signal ep6_isoerr_reg2  : std_logic ;
 
 
 constant cookie_str :string := "TRTG";
@@ -187,16 +199,18 @@ attribute mark_debug : string;
 attribute keep : string;
 
 attribute mark_debug of usb_oe	: signal is "true";
-attribute mark_debug of usb_rd	: signal is "true";
+attribute mark_debug of usb_rdn	: signal is "true";
 attribute mark_debug of usb_wr	: signal is "true";
 attribute mark_debug of FLAGA	: signal is "true";
 attribute mark_debug of FLAGB	: signal is "true";
+attribute mark_debug of out_fifo_skip  : signal is "true";
+
 
 ------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------
 begin
 txb_oe <= '1';
-sd_in <= "0000" & ain;
+sd_in <= ain;
 aout <= sd_out(11 downto 0);
 
 ymh_bufg : BUFG port map( I => ymh_clk, O => f256_clk );
@@ -252,7 +266,7 @@ with lsi_rd_addr select lsi_rd_data <=
 proc_reg_debug : process(usb_clk)
 begin
   if rising_edge(usb_clk) then
-    reg_debug <= ext( FLAGB  &FLAGA & sd_reset & io_reset & clkgen_locked, reg_debug'length );
+    reg_debug <= ext( gpio_dat & FLAGB  &FLAGA & sd_reset & io_reset & clkgen_locked, reg_debug'length );
   end if;
 end process;
 
@@ -271,10 +285,10 @@ iobufs : for i in 0 to 15 generate
 begin
   iobuf_n : iobuf 
   port map(
-    O => rx_data(i),
+    O => usb_rx_data(i),
     IO => dio(i),
-    I => tx_data(i),
-    T => usb_oe
+    I => usb_tx_data(i),
+    T => usb_oe_3s
   );
 end generate;
 
@@ -282,7 +296,7 @@ end generate;
 --rx_data <= dio;
 ------------------------------------------------------------------------------------------------------------
 bargraph: for i in 1 to led'length-1 generate
-led(i) <= '1' when rd_data_count(0)(6 downto 4) < i else '0';
+led(i) <= '1' when rd_data_count(0)(rd_data_count(0)'length-1 downto rd_data_count(0)'length-3) < i else '0';
 end generate;
 led(0) <= out_empty;
 
@@ -315,22 +329,24 @@ end process;
 bus_arbiter : process(usb_clk)
 begin
   if rising_edge(usb_clk) then
-    if usb_reset = '1' or ((tx_req = '0' or usb_txfull = '1') and usb_rxempty = '0' ) then
+    if usb_reset = '1' or tx_req = '0' or usb_txfull = '1' then
       usb_oe <= '1'; --always receiving unless
+      usb_oe_3s <= '1'; --always receiving unless      
       SLOEn <= '0';
-		tx_grant <= '0';
-    elsif usb_oe = '1' and tx_req = '1' and (usb_rd = '1' or usb_rxempty = '1')  then
+      tx_grant <= '0';
+    elsif usb_oe = '1' and tx_req = '1' and (usb_rdn = '1' or usb_rxempty = '1')  then
       usb_oe <= '0';
-      SLOEn <= '1';
-	elsif usb_oe = '0' then
+      usb_oe_3s <= '0';
+      SLOEn <= '1'; 
+    elsif usb_oe = '0' then
       tx_grant <= '1';
     end if;
   end if;
 end process;
 ------------------------------------------------------------------------------------------------------------
 
-SLRDn <= usb_rd or not usb_oe;
-SLWRn <= not usb_wr;
+SLRDn <= usb_rdn or not usb_oe;
+SLWRn <= not usb_wr or not FLAGB;--never allow a write when full
 
 --parameter OUTEP = 2,            // EP for FPGA -> EZ-USB transfers
 --parameter INEP = 6,             // EP for EZ-USB -> FPGA transfers 
@@ -349,12 +365,17 @@ begin
       out_fifo_init <= '0';
       reg_ch_params <= (others => '0');
       is_streaming <= '0';
+      resetting := '0';
       unlock <= '0';
-    elsif lsi_wr = '1' and lsi_wr_addr = X"04" then
-      reg_ch_params <= lsi_wr_data;
-      out_fifo_init <= '1';
-      resetting := '1';
-      is_streaming <= '0';
+    elsif lsi_wr = '1' then
+      if lsi_wr_addr = X"05" then 
+        reg_payload_size <= lsi_wr_data(15 downto 0);
+      elsif lsi_wr_addr = X"04" then
+        reg_ch_params <= lsi_wr_data;
+        out_fifo_init <= '1';
+        resetting := '1';
+        is_streaming <= '0';
+      end if;
     elsif resetting = '1' and (out_fifo_full or out_prog_full) = 0 then --fifo deasserted the prog_full flag after reset so we can check for assertion
       resetting := '0';
     elsif resetting = '0' and out_fifo_init = '1' and (out_fifo_full or out_prog_full) /= 0 then
@@ -377,30 +398,61 @@ proc_out_fifo_min : process (usb_clk)
 begin
   if rising_edge(usb_clk) then
     if usb_reset = '1' or out_fifo_stats_reset = '1' then
-      out_fifo_min <= X"ff";
+      out_fifo_min <= (others => '1');
 	 elsif out_empty = '1' then
-	   out_fifo_min <= X"00";
-    elsif rd_data_count(0) < out_fifo_min then
+	   out_fifo_min <= (others => '0');
+   elsif rd_data_count(0) < out_fifo_min then
 	   out_fifo_min <= rd_data_count(0);
 	 end if;  
   end if;
 end process;
 
 ------------------------------------------------------------------------------------------------------------
+proc_ep6_isoerr_count : process(usb_clk)
+begin
+  if rising_edge(usb_clk) then
+    if usb_reset = '1' then
+      ep6_isoerr_count <= 0;
+      ep6_isoerr_reg1 <= '0';
+      ep6_isoerr_reg2 <= '0';
+    else
+      ep6_isoerr_reg1 <= gpio_dat; -- sync LR
+      ep6_isoerr_reg2 <= ep6_isoerr_reg1;
+      if ( ep6_isoerr_reg2 = '0' and ep6_isoerr_reg1 = '1' and ep6_isoerr_count < 65535 ) then --rising edge
+        ep6_isoerr_count <= ep6_isoerr_count+1;
+      end if;
+    end if;
+  end if;
+end process;
 
 proc_out_fifo_skip : process (f256_clk)
 begin
   if rising_edge(f256_clk) then
     if sd_reset = '1' or is_streaming = '0' then
-      out_fifo_skip <= X"00";
-	 elsif out_empty = '1' and out_fifo_rd = '1' and out_fifo_skip < X"FF" then
-	   out_fifo_skip <= out_fifo_skip +1;
+      out_fifo_skip_count <= (others => '0');
+      out_fifo_skip <= '0';
+    elsif rd_data_count(0) = 0 and out_fifo_rd = '1' and out_fifo_skip_count < X"FFFF" then
+      out_fifo_skip_count <= out_fifo_skip_count +1;
+      out_fifo_skip <= '1';
+   else
+      out_fifo_skip <= '0';
+    end if;
+  end if;
+end process;
+------------------------------------------------------------------------------------------------------------
+proc_in_fifo_full : process (f256_clk)
+begin
+  if rising_edge(f256_clk) then
+    if sd_reset = '1' or tx_reset = '1' then
+      in_fifo_full_count <= (others => '0');
+	 elsif in_fifo_wr_full(0) = '1' and in_fifo_wr_en = '1' and in_fifo_full_count < X"FFFF" then
+	   in_fifo_full_count <= in_fifo_full_count +1;
 	 end if;  
   end if;
 end process;
 
 ------------------------------------------------------------------------------------------------------------
-rcvr : entity work.usbf_to_fifo
+rcvr : entity work.cy16_to_fifo
 generic map(
   max_sdo_lines => sdo_lines
 )
@@ -408,9 +460,9 @@ port map (
   usb_clk  => usb_clk,
   reset  => io_reset,
   usb_oe   => usb_oe,
-  usb_data => rx_data,
+  usb_data => usb_rx_data,
   usb_empty => usb_rxempty,
-  usb_rd_req  => usb_rd,
+  usb_rd_req  => usb_rdn,
   nr_outputs  => reg_ch_params(3 downto 0),
   out_fifo_full => rcvr_fifo_full,
   out_fifo_wr   => rcvr_wr,
@@ -425,22 +477,36 @@ out_empty <= out_fifo_empty(0);
 out_fifo_din <= rcvr_data when out_fifo_init = '0' else (others => (others => '0'));
 out_fifo_rd <= out_fifo_rd_en and is_streaming;
 ------------------------------------------------------------------------------------------------------------
-out_fifos : for i in 0 to max_nr_outputs -1 generate
-  output_fifo_i: entity work.output_fifo
-     port map (
-      empty  		=> out_fifo_empty(i),
-      dout   		=> out_fifo_rd_data(i),
-      rd_en			=> out_fifo_rd,
-      full			=> out_fifo_full(i),
-      din			=> out_fifo_din(i),
-      wr_en			=> out_fifo_wr_en,
-      rd_data_count	=> rd_data_count(i),
-      prog_full	=> out_prog_full(i),
+
+g_out_fifos : for i in 0 to (max_nr_outputs/3) -1 generate
+
+  output_fifo_i: entity work.ASYNCH_FIFO_72x256
+    port map (
+      empty      => out_fifo_empty(i),
+
+      dout(23 downto  0)  => out_fifo_rd_data(i*3),
+      dout(47 downto 24)  => out_fifo_rd_data(i*3+1),
+      dout(71 downto 48)  => out_fifo_rd_data(i*3+2),
+
+      rd_en      => out_fifo_rd,
+
+      full      => out_fifo_full(i),
+
+      din(23 downto  0)  => out_fifo_din(i*3),
+      din(47 downto 24)  => out_fifo_din(i*3+1),
+      din(71 downto 48)  => out_fifo_din(i*3+2),
+
+      wr_en      => out_fifo_wr_en,
+      rd_data_count  => rd_data_count(i),
+
+      prog_full  => out_prog_full(i),
       prog_full_thresh => reg_ch_params(23 downto 16),
-      rd_rst	=> sd_reset,
-      rd_clk	=> f256_clk,
-      wr_rst	=> io_reset,
-      wr_clk	=> usb_clk
+      --prog_full_thresh(8 downto 1) => reg_ch_params(23 downto 16),
+      --prog_full_thresh(0) => '0',
+      rd_rst  => sd_reset,
+      rd_clk  => f256_clk,
+      wr_rst  => io_reset,
+      wr_clk  => usb_clk
     );  
 end generate;
 ------------------------------------------------------------------------------------------------------------
@@ -484,31 +550,47 @@ end generate;
 
 in_fifo_empty <= '0' when in_fifo_rd_empty = 0 else '1';
 
+------------------------------------------------------------------------------------------------------------
+
+with xmtr_addr select xmtr_data <=
+  ext(out_fifo_min,16) when X"0000",
+  out_fifo_skip_count when X"0001", 
+  reg_sr_count(15 downto 0) when X"0002",
+  reg_sr_count(31 downto 16) when X"0003",
+  in_fifo_full_count when X"0004",
+  std_logic_vector(to_unsigned(ep6_isoerr_count,16)) when X"0005",
+  reg_debug(15 downto 0)  when X"0006",
+  X"CDCD" when others;
+
+------------------------------------------------------------------------------------------------------------
+tx_reset <= '1' when reg_ch_params = 0 else '0';
+
 xmtr: entity work.fifo_to_m_axis
 generic map (
   max_sdi_lines => sdi_lines
 ) port map (
   --cypress interface
   clk  => usb_clk,
-  reset=> io_reset,
+  reset=> tx_reset,
 
   -- status report
-  status_1 => out_fifo_min,
-  status_2 => out_fifo_skip,
-  nr_inputs => reg_ch_params(7 downto 4),
-  nr_padding => reg_ch_params(31 downto 24),
-  nr_samples => reg_ch_params(15 downto 8),
-  tx_enable  => is_streaming,
-  status_refresh => out_fifo_stats_reset,
+  data_in         => xmtr_data,
+  data_addr       => xmtr_addr,
 
-  in_fifo_empty => in_fifo_empty,
-  in_fifo_rd    => in_fifo_rd_en,
-  in_fifo_data  => in_fifo_rd_data,
+  nr_inputs       => reg_ch_params(7 downto 4),
+  payload_size    => reg_payload_size,
+  nr_samples      => reg_ch_params(15 downto 8),
+  tx_enable       => '1',
+  status_refresh  => out_fifo_stats_reset,
 
-  m_axis_tvalid => in_axis_tvalid,
-  --m_axis_tlast
-  m_axis_tready => in_axis_tready,
-  m_axis_tdata  => in_axis_tdata
+  in_fifo_empty   => in_fifo_empty,
+  in_fifo_rd      => in_fifo_rd_en,
+  in_fifo_data    => in_fifo_rd_data,
+
+  m_axis_tvalid   => in_axis_tvalid,
+  m_axis_tlast    => in_axis_tlast,
+  m_axis_tready   => in_axis_tready,
+  m_axis_tdata    => in_axis_tdata
 );
 
 i_s_axis_to_w_fifo: entity work.s_axis_to_w_fifo
@@ -516,17 +598,17 @@ i_s_axis_to_w_fifo: entity work.s_axis_to_w_fifo
     DATA_WIDTH => 16
   ) port map (
     clk  => usb_clk,
-    reset=> io_reset,
+    reset=> tx_reset,
 
     tx_grant   => tx_grant,
     tx_req  => tx_req,
-    tx_data => tx_data,
+    tx_data => usb_tx_data,
     tx_full => usb_txfull,
     tx_wr  => usb_wr,
     pktend => pktend,
 
     s_axis_tvalid => in_axis_tvalid,
-    --s_axis_tlast
+    s_axis_tlast  => in_axis_tlast,
     s_axis_tready => in_axis_tready,
     s_axis_tdata  => in_axis_tdata
 );

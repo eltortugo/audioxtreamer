@@ -141,8 +141,8 @@ begin
   -- msb left(justified)
   -- the input shows up one clock after the word clock transition, so sample in the middle of the window (3)
   input_shift_enable <= '1' when sd_counter(6 downto 2) < bit_depth and sd_counter(1 downto 0) = "11" else '0';
-  -- to keep the round trip delay constant, disable loading the input fifo when the output underruns
-  in_fifo_wr_en <= '1' when sd_counter = X"FE" and ( sd_record_only = '1' or out_empty = '0') else '0';
+  
+  in_fifo_wr_en <= '1' when sd_counter = X"FE" else '0';
 
   input_shifter : for i in 0 to sdi_lines-1 generate
     process(f256_clk)

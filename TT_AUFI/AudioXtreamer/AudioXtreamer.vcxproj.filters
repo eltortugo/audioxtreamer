@@ -86,6 +86,12 @@
     <ClInclude Include="SettingsDlg.cpp">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="PropertySheetDlg.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="UsbBackend.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AudioXtreamer.cpp">
@@ -116,6 +122,9 @@
       <Filter>Source Files\libs\NTray</Filter>
     </ClCompile>
     <ClCompile Include="MainFrame.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="PropertySheetDlg.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
