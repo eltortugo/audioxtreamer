@@ -71,16 +71,16 @@ begin
 
   ------------------------------------------------------------------------------------------------------------
   --SPDIF out
-  spdif_tx_inst: entity work.spdif_tx
-    port map (
-      bit_clock => f256_clk,
-      cke       => sd_counter(0),
-      bit_counter => sd_counter(6 downto 1),
-      l_ch      => out_fifo_rd_data(0),
-      r_ch      => out_fifo_rd_data(1),
-      spdif_out => spdif_out1
-    );
-
+  --spdif_tx_inst: entity work.spdif_tx
+  --  port map (
+  --    bit_clock => f256_clk,
+  --    cke       => sd_counter(0),
+  --    bit_counter => sd_counter(6 downto 1),
+  --    l_ch      => out_fifo_rd_data(0),
+  --    r_ch      => out_fifo_rd_data(1),
+  --    spdif_out => spdif_out1
+  --  );
+spdif_out1 <= '1';
   ------------------------------------------------------------------------------------------------------------
   --TBI: add a port to select the padding scheme between left/right/i2s etc
 

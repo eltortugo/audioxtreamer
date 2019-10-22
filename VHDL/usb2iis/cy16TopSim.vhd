@@ -88,19 +88,20 @@ constant test_data: payload :=
 );
 
  
-signal ft_clk  : std_logic;
+signal usb_clk  : std_logic;
 signal reset: std_logic;
-signal nreset: std_logic;
 
-signal ft_DATA : std_logic_vector(15 downto 0);
-signal ft_nOE  : std_logic;
-signal ft_nRD  : std_logic;
+
+signal usb_dio : std_logic_vector(15 downto 0);
+signal SLOEn  : std_logic;
+signal SLRDn  : std_logic;
 signal wr_counter: integer range 0 to payload_size -1;
-signal ft_send : std_logic_vector(15 downto 0);
+signal out_data : std_logic_vector(15 downto 0);
 
-signal ft_nwr     : std_logic;
+signal SLWRn     : std_logic;
 signal tx_full    : std_logic;
 
+signal flaga      : std_logic;
 signal flagb      : std_logic;
 
 signal yamaha_clk: std_logic;
@@ -109,11 +110,16 @@ signal yamaha_word_clk: std_logic;
 signal led : std_logic_vector(7 downto 0);
 signal nr_writes : natural;
 
+signal sof : std_logic;
+signal pktend : std_logic;
+
 begin
 
-clk_gen(ft_clk, 48_000_000.0 );
---clk_gen(yamaha_clk, 11_289_600.0 ); --44.1 khz
-clk_gen(yamaha_clk, 24_576_000.0 ); --96 khz
+clk_gen(usb_clk, 48_000_000.0 );
+clk_gen(yamaha_clk, 11_289_600.0 ); --44.1 khz
+--clk_gen(yamaha_clk, 24_576_000.0 ); --96 khz
+
+signal_gen(sof, usb_clk, '0', 100, '1', 8, '0', (6000-8), true);
 
 process
 begin 
@@ -123,23 +129,38 @@ begin
 	wait;
 end process;
 
-nreset <=  not reset;
-
-process (ft_clk)
+process (usb_clk)
 begin
-  if rising_edge(ft_clk) then
+  if rising_edge(usb_clk) then
     if reset = '1' then
-      ft_send <= X"EFEF";
+      out_data <= X"EFEF";
       wr_counter <= 0;
-    elsif ft_nRD = '0' then
+    elsif SLRDn = '0' and flaga = '1' then
       if wr_counter = (payload_size/2-1) then
-        wr_counter <= 0 after 3 ns;
+        wr_counter <= 0;
       else
-        wr_counter <= wr_counter+1 after 3 ns;
+        wr_counter <= wr_counter+1;
       end if;
-      ft_send <= test_data((wr_counter*2)+1)& test_data(wr_counter*2) after 3 ns; -- simulate the flop clock/transfer delay
+      out_data <= test_data((wr_counter*2)+1)& test_data(wr_counter*2); -- simulate the flop clock/transfer delay
     end if;
-  end if;  
+  end if;
+end process;
+
+process (usb_clk)
+  variable delay: integer := 10;
+begin
+  if rising_edge(usb_clk) then
+    if reset = '1' then
+      flaga <= '1';
+    --elsif wr_counter = ((payload_size/2)-1) then
+    --  flaga <= '0';
+    --  delay := 10;
+    --elsif delay = 0 then
+    --  flaga <= '1';
+    --elsif flaga = '0' then
+    --  delay := delay -1;
+    end if;
+  end if;
 end process;
 
 process (yamaha_clk)
@@ -155,37 +176,22 @@ begin
   yamaha_word_clk <= f256_count(7);
 end process;
 
-ft_data <= ft_send when ft_nOE = '0' else (others => 'Z');
+usb_dio <= out_data when SLOEn = '0' else (others => 'Z');
 
-process (ft_clk, reset, tx_full, ft_nwr)
-
-variable pending : boolean := false;
-variable delay: natural := 0;
---variable counted : natural := 0;
+process (usb_clk, reset)
 begin
-  if rising_edge(ft_clk) then
-    if reset = '1' then
+  if rising_edge(usb_clk) then
+    if reset = '1'then
+      tx_full <= '0';
       nr_writes <= 0;
-      tx_full <= '0';
-      pending := false;
-    elsif ft_nwr = '0' then
-      nr_writes <= nr_writes +1;
-    end if;
-    
-    if pending = true then
-      delay := delay +1;
     else
-      delay := 0;
-    end if;
 
-    if nr_writes = 1023 then --after 2 buffers simulate a full condition
-      tx_full <= '1';
-      pending := true;
-    end if;
-    
-    if delay = 31 then  --which takes 32 cycles to resolve
-      pending := false;
-      tx_full <= '0';
+      if SLWRn = '0' then
+        nr_writes <= nr_writes +1;
+      end if;
+
+
+
     end if;
   end if;
 end process;
@@ -198,32 +204,34 @@ port map(
 
     led(7 downto 0) => led(7 downto 0),
 
-	 PKTEND => open,
-	 
-	 areset => reset,
 
-    cy_clk  => ft_clk,
+
+areset => reset,
+
+    cy_clk  => usb_clk,
     -- DATA IO
-    dio    => ft_DATA,
+    dio    => usb_dio,
 
-    FLAGA => '1', -- repeat the message
+    FLAGA => flaga, -- repeat the message
     FLAGB => flagb,
-    
-    SLRDn  => ft_nRD,
-    SLOEn  => ft_nOE,
-    SLWRn   => ft_nwr,
+    PKTEND => pktend,
+    SLRDn  => SLRDn,
+    SLOEn  => SLOEn,
+    SLWRn   => SLWRn,
 
     ain => sd_out(11 downto 0), --loopback
     aout => sd_out(11 downto 0),
 
     ymh_clk => yamaha_clk,
     ymh_word_clk => yamaha_word_clk,
-	 
-	 lsi_clk => '0',
-	 lsi_mosi => '0',
-	 lsi_stop => '0',
+
+   lsi_clk  => '0',
+   lsi_mosi => '0',
+   lsi_stop => '0',
    
-   gpio_dat => '0'
+   midi_rx => (others => '0'),
+
+   gpio_dat => sof
     );
 
 

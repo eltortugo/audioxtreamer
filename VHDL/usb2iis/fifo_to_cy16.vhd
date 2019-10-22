@@ -24,13 +24,11 @@ entity fifo_to_m_axis is
     m_axis_tdata : out STD_LOGIC_VECTOR(15 downto 0);
 
     nr_inputs: in std_logic_vector(3 downto 0);
-    payload_size: in std_logic_vector(15 downto 0);
-    nr_samples: in std_logic_vector(7 downto 0);
-    tx_enable : in std_logic;
+    sof_int  : in std_logic;
 
     data_in : in std_logic_vector(15 downto 0);
-    data_addr : out std_logic_vector(15 downto 0);
-    status_refresh : out std_logic;
+    data_addr : out natural;
+
     in_fifo_empty: in std_logic;
     in_fifo_rd   : out std_logic;
     in_fifo_data : in slv24_array(0 to (max_sdi_lines*2)-1)
@@ -39,20 +37,15 @@ end fifo_to_m_axis;
 
 architecture Behavioral of fifo_to_m_axis is
 
-  --header format is AA55 -> extra payload  -> 55AA -> audio payload
-  constant header_size : natural := 2; -- first and last words
-  constant max_payload : natural := 510; -- number of words (fifo writes)
-  constant max_samples : natural := 255; -- number depends on the msb of the ch count 0 -> x4, 1 -> x1
+  type tx_state_type is (header, audio);
+  signal tx_state : tx_state_type := header;
+  
+  signal fifo_empty_r : std_logic;
 
-  type tx_state_type is (txst_idle, txst_header, txst_data );
-  signal tx_state : tx_state_type := txst_idle;
+  signal word_counter: natural range 0 to 512 ;
+  signal sample_complete : std_logic;
 
-
-
-  signal word_counter : natural range 0 to header_size + max_payload + 3*max_sdi_lines*max_samples ;
   signal nr_ins : natural range 0 to max_sdi_lines;
-  signal payload: natural range 0 to max_payload;
-  signal samples_pp: natural range 0 to max_samples;
   signal in_fifo_index: natural range 0 to (max_sdi_lines*2)-1;
   signal fifo_rd   : std_logic;
   signal tvalid   : std_logic;
@@ -63,41 +56,34 @@ architecture Behavioral of fifo_to_m_axis is
   attribute mark_debug of tx_state    : signal is "true";
   attribute mark_debug of in_fifo_rd  : signal is "true";
   attribute mark_debug of in_fifo_empty : signal is "true";
-  attribute mark_debug of word_counter: signal is "true";
 
   ------------------------------------------------------------------------------------------------------------
 begin
 
   nr_ins <= to_integer(unsigned(nr_inputs)) + 1;
-  samples_pp <= to_integer(unsigned(nr_samples));
-  payload <= to_integer(unsigned(payload_size));
+  
+  ------------------------------------------------------------------------------------------------------------
 
   tx_fsm: process (clk)
   begin
     if rising_edge(clk) then
-      if reset = '1' then 
-        tx_state <= txst_idle;
-        fifo_rd <= '0';
+
+      fifo_empty_r <= in_fifo_empty;
+
+      if reset = '1' then
+        tx_state <= header;
       else
+
         case tx_state is
-          when txst_idle => 
-            if tx_enable = '1' and samples_pp /= 0 and in_fifo_empty = '0' then
-              tx_state <= txst_header;
-              fifo_rd <= '1';
+          when header =>
+            if word_counter = 9 then
+              tx_state <= audio;
             end if;
-          when txst_header => 
-            fifo_rd <= '0';
-            if word_counter =  header_size + payload -1 and m_axis_tready = '1' then
-              tx_state <= txst_data;
-            end if;
-          when txst_data =>
-            fifo_rd <= '0';
-            if word_counter =  (samples_pp*nr_ins*3) -1  and m_axis_tready = '1' then
-              if nr_ins /= 0 and in_fifo_empty = '0' then 
-                tx_state <= txst_header;
-                fifo_rd <= '1';
-              else
-                tx_state <= txst_idle;
+
+          when audio =>
+            if sample_complete = '1' then
+              if in_fifo_empty = '1' or (word_counter + (nr_ins*3)) >= 512 then
+                tx_state <= header;
               end if;
             end if;
         end case;
@@ -105,29 +91,46 @@ begin
     end if;
   end process;
 
+  in_fifo_rd <= fifo_rd;
+
+  ------------------------------------------------------------------------------------------------------------
+
+  m_axis_tlast <= '1' when sample_complete = '1' and (in_fifo_empty = '1' or (word_counter + (nr_ins*3)) > 511) else '0';
+  fifo_rd <= '1' when in_fifo_empty = '0' and
+                  ( word_counter = 9 or
+                    (word_counter = 10 and fifo_empty_r = '1') or
+                    ( word_counter > 10 and
+                     ((word_counter + (nr_ins*3)) < 512) and
+                     (sample_complete = '1')
+                    )
+                  ) else '0';
+
+
+  sample_complete <= '1' when (in_fifo_index/2 = nr_ins-1 and ((word_counter-10) mod 3) = 2) else '0';
   ------------------------------------------------------------------------------------------------------------
   tvalid_proc: process (clk)
   begin
     if rising_edge(clk) then
-      if reset = '1' then
+      if reset = '1' then 
         tvalid <= '0';
       else
         case tx_state is
-          when txst_idle => 
-            tvalid <= '0';
-          when txst_header => 
+          when header => 
             tvalid <= '1';
-          when txst_data =>
-            if (in_fifo_index/2 = nr_ins-1 and (word_counter mod 3) = 2) then --are we at the last word of the last channel
-              if word_counter < samples_pp*nr_ins*3 - 1 then -- if not the last sample
-                --axi rule: valid assertion must not depend on ready, valid dessertion should.
-                --axi rule: once valid is asserted it must stay that way until acked by a ready.
-                if tvalid = '0' or m_axis_tready = '1' then
-                  tvalid <= not in_fifo_empty ;
-                end if;
-              end if;
-            else
+            if word_counter = 9 and in_fifo_empty = '1' and m_axis_tready = '1' then
+              tvalid <= '0'; --deassertion only when tready
+            end if;
+          when audio =>
+            if tvalid = '0' and word_counter > 9 and fifo_rd = '1' then
               tvalid <= '1';
+            --elsif sample_complete = '1' then --are we at the last word of the last channel
+            --  if m_axis_tready = '1' then
+            --    if  ((word_counter + (nr_ins*3)) < 512) and in_fifo_empty = '0' then
+            --      tvalid <= '1';
+            --    else
+            --      tvalid <= '0';
+            --    end if;
+            --  end if;
             end if;
         end case;
       end if;
@@ -137,88 +140,65 @@ begin
   m_axis_tvalid <= tvalid;
 
   ------------------------------------------------------------------------------------------------------------
-
-  in_fifo_rd <= '1' when fifo_rd = '1' or (in_fifo_empty = '0' and m_axis_tready = '1' and in_fifo_index/2 = nr_ins-1 and (word_counter mod 3) = 2  ) else '0';
-
-  ------------------------------------------------------------------------------------------------------------
-  progress_counter : process (clk)
+  p_word_counter : process (clk)
   begin
     if rising_edge(clk) then
       if reset = '1' then
         word_counter <= 0;
       else
-        m_axis_tlast <= '0';
         case tx_state is
-          when txst_idle => 
-            word_counter <= 0;
-          when txst_header =>
+          when header  =>
             if m_axis_tready = '1' then
-              if word_counter < header_size + payload -1 then
-                word_counter <= word_counter +1;
-              else
-                word_counter <= 0;
-              end if;
+              word_counter <= word_counter +1;
             end if;
-          when txst_data =>
-            if m_axis_tready = '1' then
-              if word_counter < samples_pp*nr_ins*3 - 1 then
-                 -- the sample is finished and we need to fetch a new sample from the fifo
-                if not (in_fifo_index/2 = nr_ins-1 and (word_counter mod 3) = 2) or in_fifo_empty = '0' then
-                  word_counter <= word_counter +1;
-                end if;
-              else
+          when audio =>
+            if sample_complete = '1' then
+              if in_fifo_empty = '1' or (word_counter + (nr_ins*3)) > 511 then
                 word_counter <= 0;
-                m_axis_tlast <= '1';
+              elsif in_fifo_empty = '0' and tvalid = '1' and m_axis_tready = '1' and word_counter < 511 then
+                word_counter <= word_counter +1;
               end if;
+            elsif tvalid = '1' and m_axis_tready = '1' and word_counter < 511 then
+              word_counter <= word_counter +1;
             end if;
         end case;
       end if;
     end if;
   end process;
 ------------------------------------------------------------------------------------------------------------
-  data_addr <= std_logic_vector(to_unsigned(word_counter-1,16)) when tx_state = txst_header and word_counter > 0 else X"0000";
+  data_addr <= word_counter;
 ------------------------------------------------------------------------------------------------------------
-  tx_data_reg : process (clk)
+  tx_data_reg : process (clk, m_axis_tready, data_in, word_counter,in_fifo_data, in_fifo_index)
   begin
-    if rising_edge(clk) then
-      if reset = '1' then 
-        m_axis_tdata <= X"CDCD";
-      elsif tx_state /= txst_idle and m_axis_tready = '1' then
-        if tx_state = txst_header then
-          if word_counter = 0 then
-            m_axis_tdata <= X"AAAA";
-          elsif word_counter = header_size + payload - 1 then
-            m_axis_tdata <= X"5555";
-          else
-            m_axis_tdata <= data_in;
-          end if;
-        elsif tx_state = txst_data then
-          case (word_counter mod 3) is
-            when 0 => 
-              m_axis_tdata <= in_fifo_data(in_fifo_index)(15 downto 0);
-            when 1 =>
-              m_axis_tdata <= in_fifo_data(in_fifo_index+1)(7 downto 0) & in_fifo_data(in_fifo_index)(23 downto 16);
-            when 2 => 
-              m_axis_tdata <= in_fifo_data(in_fifo_index+1)(23 downto 8);
-            when others => 
-              m_axis_tdata <= X"CACA";
-          end case;
-        else
-          m_axis_tdata <= X"ADBA";
-        end if;
-      end if;
-    end if;
+    --if rising_edge(clk) then
+    --if m_axis_tready = '1' then
+        case word_counter is
+          when 0 => m_axis_tdata <= X"AAAA";
+          when 1 => m_axis_tdata <= X"5555";
+          when 2 to 9 => m_axis_tdata <= data_in;
+          when others =>
+            case ((word_counter - 10) mod 3) is
+              when 0 => 
+                m_axis_tdata <= in_fifo_data(in_fifo_index)(15 downto 0);
+              when 1 =>
+                m_axis_tdata <= in_fifo_data(in_fifo_index+1)(7 downto 0) & in_fifo_data(in_fifo_index)(23 downto 16);
+              when 2 => 
+                m_axis_tdata <= in_fifo_data(in_fifo_index+1)(23 downto 8);
+              when others => 
+                m_axis_tdata <= X"CACA";
+            end case;
+        end case;
+    --end if;
+    --end if;
   end process;
   ------------------------------------------------------------------------------------------------------------
   fifo_index : process (clk)
   begin
     if rising_edge(clk) then
-      if tx_state = txst_data then 
-        if m_axis_tready = '1' and  (word_counter mod 3) = 2 then
+      if tx_state = audio then 
+        if tvalid = '1' and m_axis_tready = '1' and  ((word_counter-10) mod 3) = 2 then
           if in_fifo_index/2 = nr_ins-1 then
-            if in_fifo_empty = '0' then
-              in_fifo_index <= 0;
-            end if;
+            in_fifo_index <= 0;
           else
             in_fifo_index <= in_fifo_index+2;
           end if;
@@ -229,18 +209,4 @@ begin
     end if;
   end process;
   ------------------------------------------------------------------------------------------------------------
-  
-  proc_status_refresh: process (clk)
-  begin
-    if rising_edge(clk) then
-	   if reset = '1' then
-		  status_refresh <= '0';
-		elsif tx_state = txst_header and word_counter = 0 and m_axis_tready = '1' then
-		  status_refresh <= '1';
-		else
-		  status_refresh <= '0';
-		end if;		
-    end if;    
-  end process;
-
 end architecture;

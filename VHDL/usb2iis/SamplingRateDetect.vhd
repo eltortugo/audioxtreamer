@@ -1,81 +1,110 @@
-library IEEE;
-  use IEEE.std_logic_1164.all;
+library ieee;
+
+  use ieee.std_logic_1164.all;
   use IEEE.numeric_std.all;
   use ieee.std_logic_unsigned.all;
-
   use work.common_types.all;
 
+
 entity SamplingRateDetect is
-  port (
-    clk: in  std_logic;
-    rst: in  std_logic;
-    word_clk: in  std_logic;
-    sr_count: out slv_32
+  generic ( gate_length : positive := 2400000 );
+  port(
+    clk        : in std_logic;
+    rst        : in std_logic;
+    pcm_clk   : in std_logic;
+    sr_count   : out slv_16
   );
-end entity;
+end SamplingRateDetect;
 
-architecture rtl of SamplingRateDetect is
-  signal edge_det : std_logic_vector(1 downto 0);
+architecture behavioral of SamplingRateDetect is
+  signal run : std_logic := '0';
+  signal gate_counter_i   : natural range 0 to gate_length := 0;
+  signal sample_counter_i : slv_16 := (others => '0');
+  signal done_i           : std_logic := '0';
+  signal t0_i             : std_logic := '0';
+  signal t_i              : std_logic := '0';
+  signal ref_clk_div      : std_logic := '0';
+  signal done_r : std_logic_vector(2 downto 0) := "000";
+  signal rearm_r: std_logic_vector(2 downto 0) := "000";
+  signal word_cke: std_logic := '0';
+  signal pcm_128 : std_logic := '0';
+
   attribute ASYNC_REG : string;
-  attribute ASYNC_REG of edge_det : signal is "TRUE";
-  
-  constant gate_size : natural := 4800000; --100ms
-  signal c100ms : natural range 0 to gate_size-1 := 0;
-  signal pre_count : slv_16 := (others => '0');
-  signal post_count : slv_16 := (others => '0');
-  signal edge_count, edge_reg, reminder_reg : slv_16 := (others => '0');
-  signal post_active : std_logic := '0';
-  
+  attribute ASYNC_REG of done_r  : signal is "TRUE";
+  attribute ASYNC_REG of rearm_r : signal is "TRUE";
+
+
 begin
   
-  ------------------------------------------------------------------------------------------------------------
-
-  --sampling_rate_counter : process(usb_clk)
-  --variable count : slv_16 := (others => '0');
-  --variable edge : std_logic_vector(1 downto 0);
-  --begin
-  --  if rising_edge(usb_clk) then
-  --    edge := edge(0) & sd_word_clk;
-  --    if ft_reset = '1' or (edge(0) = '1' and edge(1) = '0') then
-  --      sr_count <= count;
-  --    count := (others => '0');
-  --    else
-  --      count := count + 1;
-  --    end if;
-  --  end if;
-  --end process;
-
-sampling_rate_counter : process(clk)
-begin
-  if rising_edge(clk) then
-    edge_det <= edge_det(0) & word_clk;
-    if rst = '1' or c100ms = gate_size-1 then
-      c100ms <= 0;
-      edge_reg <= edge_count;
-      reminder_reg <= pre_count + post_count;
-      pre_count <= (others => '0');
-      post_count <= (others => '0');
-      edge_count <= (others => '0');
-      post_active <= '0';
-    else
-      c100ms <=  c100ms + 1;
-
-      if post_active = '0' then 
-        pre_count <= pre_count + 1;
-      else
-        post_count <= post_count + 1;
+  p_word_clk : process (pcm_clk)
+    variable count : std_logic_vector(7 downto 0) :=  (others => '0');
+  begin
+    if rising_edge(pcm_clk) then
+      count := count +1;
+      word_cke <= '0';
+      if count = X"7F" then
+        word_cke <= '1';
       end if;
+      pcm_128 <= count(7);
+    end if;
+  end process;
 
-      if (edge_det(0) = '1' and edge_det(1) = '0') then
-        if post_active = '1' then 
-          edge_count <= edge_count+1;
-          post_count <= (others => '0');
+  p_sampl_counter : process(pcm_clk,run,word_cke)
+  begin
+    if run = '0' then
+      sample_counter_i <= (others => '0');
+    elsif rising_edge(pcm_clk) and word_cke = '1' then
+      if t_i ='1' then
+        sample_counter_i <= sample_counter_i+1;
+      end if;
+    end if;
+
+    if rising_edge(pcm_clk) and word_cke = '1' then
+      t_i <= t0_i;
+      done_i <= (not t0_i) and run;
+    end if;
+  end process;
+
+
+  p_gate_counter : process(clk,ref_clk_div) is
+  begin
+    if rising_edge(clk) then
+      ref_clk_div <= not ref_clk_div; --generate the count en signal
+    end if;
+
+    if rising_edge(clk)  and ref_clk_div = '1'then
+        if run = '0' then
+          t0_i <= '0';
+          gate_counter_i <= 0;
+        elsif gate_counter_i = gate_length then
+          t0_i <= '0';
         else
-          post_active <= '1';
+          t0_i <= '1';
+          gate_counter_i <= gate_counter_i+1;
+        end if;
+      end if;
+  end process;
+
+
+  p_state: process(clk) is
+  begin
+    if rising_edge(clk) then
+      if rst = '1' then
+        run <= '0';
+        done_r <= "000";
+        rearm_r<= "000";
+      else
+        done_r <= done_r(1 downto 0) & done_i; --cdc + edge detect
+        rearm_r<= rearm_R(1 downto 0) & pcm_128;
+
+        if run = '0' and rearm_r (2 downto 1) = "10" then --prepare in the falling edge
+          run <= '1';
+        elsif run = '1' and done_r(2 downto 1) = "01" then --rising edge
+          sr_count <= sample_counter_i;
+          run <= '0';
         end if;
       end if;
     end if;
-  end if;
-  sr_count <= reminder_reg & edge_reg;
-end process;
-end architecture;
+  end process;
+
+end architecture behavioral;
