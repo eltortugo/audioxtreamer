@@ -42,16 +42,14 @@ double AsioSamples2double(ASIOSamples* samples)
 
 
 
-
+const wchar_t* regKey = L"TortugASIO AudioXtreamer";
 #ifdef _WIN64
 const wchar_t* dllName =     L"TortugASIOx64.dll";
-const wchar_t* regKey =      L"TortugASIO x64 Driver for AudioXtreamer";
 const wchar_t* driverName =  L"TortugASIO x64";
 const wchar_t* className =   L"TORTUGASIO64";
 const wchar_t* ifaceName =   L"TortugASIOx64";
 #else // !_WIN64            
 const wchar_t* dllName    =  L"TortugASIO.dll";
-const wchar_t* regKey   =    L"TortugASIO x86 Driver for AudioXtreamer";
 const wchar_t* driverName =  L"TortugASIO x86";
 const wchar_t *className =   L"TORTUGASIO";
 const wchar_t* ifaceName =   L"TortugASIO";

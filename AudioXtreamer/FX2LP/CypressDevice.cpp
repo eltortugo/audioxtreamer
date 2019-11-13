@@ -188,10 +188,10 @@ bool CypressDevice::Open()
   mDefInEP = info.default_in_ep;
   mDefOutEP = info.default_out_ep;
 
-  //status = ztex_get_fpga_config(handle);
-  //if (status == -1)
-  //  goto err;
-  //else if (status == 0)
+  status = ztex_get_fpga_config(handle);
+  if (status == -1)
+    goto err;
+  else if (status == 0)
   {
 
    if (mBitstream != nullptr) {
@@ -295,9 +295,6 @@ bool CypressDevice::IsPresent() {
   return mDevHandle != INVALID_HANDLE_VALUE;
 }
 
-#define LAP(start,stop,freq) ((uint32_t)(((stop.QuadPart - start.QuadPart) * 1000000) / freq.QuadPart))
-template<typename T1, typename T2>
-constexpr auto NrPackets(T1 size, T2 len) { return ( (size / len) + (size % len ? 1 : 0) ); }
 
 #define SNAP_TOLERANCE 100
 #define SNAP_TO_AND_RET(val,snapto) { if(val > (snapto - SNAP_TOLERANCE) && val < (snapto + SNAP_TOLERANCE)) return snapto; }
@@ -307,10 +304,6 @@ constexpr auto ConvertSampleRate(uint32_t srReg)
   uint16_t count = (uint16_t)(srReg & 0xFFFF);
   uint16_t fract = (uint16_t)(srReg >> 16);
   uint32_t sr = count * 10;
-  //mSRacc -= mSRvals[mSRidx];
-  //mSRacc += sr;
-  //mSRvals[mSRidx] = sr;
-  //mSRidx = (mSRidx + 1) & 0xf;
 
   SNAP_TO_AND_RET(sr, 44100);
   SNAP_TO_AND_RET(sr, 48000);
@@ -372,13 +365,10 @@ void CypressDevice::InitTxHeaders(uint8_t* ptr, uint32_t Samples)
 {
   USHORT w = 0;
   ZeroMemory(ptr, Samples * OUTStride);
-  for (uint32_t i = 0; i < Samples; i++)
+  uint8_t* p = ptr;
+  for (uint32_t i = 0; i < Samples; i++, p += OUTStride)
   {
-    PUCHAR p = ptr + i * OUTStride;
-    *p = 0xAA;
-    *(p + 1) = 0x55;
-    *(p + 2) = 0x55;
-    *(p + 3) = 0xAA;
+    *(uint32_t*)p = 0xAA5555AA;
 #if LOOPBACK_TEST
     /*for (uint32_t c = 0; c < (nrOuts/2)*3; ++c)
     {
@@ -614,10 +604,13 @@ void CypressDevice::TxIsochCB()
         uint16_t txIsoSize = IsoSize;
         uint8_t* ptr = TxReq.buff;
 
-        if (uint8_t s = midi.MidiOut(ptr))
+        for (uint8_t c = 0; c < rxpktCount / 8; ++c)
         {
-          ptr += s;
-          txIsoSize -= s;
+          if (uint8_t s = midi.MidiOut(ptr))
+          {
+            ptr += s;
+            txIsoSize -= s;
+          }
         }
 
         uint16_t TxSamples = min(IsoTxSamples, txIsoSize / OUTStride);
@@ -665,7 +658,7 @@ void CypressDevice::TxIsochCB()
         }
 
         // silence samples
-        if (TxSamples && !ClientActive)
+        if (TxSamples && (!ClientActive || TxBuff == AsioBuff))
         {
           InitTxHeaders(ptr, TxSamples);
           ptr += TxSamples * OUTStride;
@@ -686,8 +679,8 @@ void CypressDevice::TxIsochCB()
 
 void CypressDevice::TimerCB()
 {
-
-  LOGN(" %u Samples/sec\r", sSampleCounter);
+  //LOGN(" %u Samples/sec\r", sSampleCounter);
+  mDevStatus.SwSR = sSampleCounter;
   sSampleCounter = 0;
 }
 

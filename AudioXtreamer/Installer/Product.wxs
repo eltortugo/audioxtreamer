@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product
+    Id="*"
+    Name="AudioXtreamer"
+    Language="1033"
+    Version="0.1.0.0"
+    Manufacturer="TurtleDesign"
+    UpgradeCode="0c53acf8-2a44-40e1-957f-a805936b567a">
+    <Package
+      InstallerVersion="200"
+      Compressed="yes"
+      InstallScope="perMachine" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab ="yes"/>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFilesFolder">
+        <Directory Id="INSTALLDIR32" Name="AudioXtreamer">
+          <Component Id='HelperLibrary' Guid="*" Win64="no">
+            <File Id='AsioDLLx86' Name='TortugASIO.dll' DiskId='1' Source='..\TortugASIO\Release\TortugASIO.dll' KeyPath='yes' />
+            <RegistryValue Root="HKCR" Key="Wow6432Node\CLSID\{25CBA31C-951A-48C6-B513-012E1E2D09D8}" Value="TortugASIO x86" Type="string" Action="write" />
+            <RegistryValue Root="HKCR" Key="Wow6432Node\CLSID\{25CBA31C-951A-48C6-B513-012E1E2D09D8}\InprocServer32" Value="[INSTALLDIR32]TortugASIO.dll" Type="string" Action="write" />
+            <RegistryValue Root="HKCR" Key="Wow6432Node\CLSID\{25CBA31C-951A-48C6-B513-012E1E2D09D8}\InprocServer32" Name="ThreadingModel" Value="Apartment" Type="string" Action="write" />
+            <RegistryValue Root="HKLM" Key="Software\WOW6432Node\ASIO\TortugASIO AudioXtreamer" Name="CLSID" Value="{25CBA31C-951A-48C6-B513-012E1E2D09D8}" Type="string" Action="write" />
+            <RegistryValue Root="HKLM" Key="Software\WOW6432Node\ASIO\TortugASIO AudioXtreamer" Name="Description" Value="TortugASIO x86" Type="string" Action="write" />
+          </Component>
+        </Directory>
+      </Directory>
+
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLDIR" Name="AudioXtreamer">
+          <Component Id="MainExecutable" Guid="*" Win64="yes">
+            <File Id='AudioXtreamerEXE' Name='AudioXtreamer.exe' DiskId='1' Source='..\AudioXtreamer\x64\Release\AudioXtreamer.exe' KeyPath='yes'>
+              <Shortcut Id="startmenu" Directory="ProgramMenuDir" Name="AudioXtreamer" WorkingDirectory='INSTALLDIR' Icon="AudioXtreamer.exe" IconIndex="0" Advertise="yes" />
+              <Shortcut Id="startup"   Directory="StartupFolder"  Name="AudioXtreamer" WorkingDirectory='INSTALLDIR' Icon="AudioXtreamer.exe" IconIndex="0" Advertise="yes" />
+            </File>
+          </Component>
+          <Component Id='HelperLibrary64' Guid="*" Win64="yes">
+            <File Id='AsioDLLx64' Name='TortugASIOx64.dll' DiskId='1' Source='..\TortugASIO\x64\Release\TortugASIOx64.dll' KeyPath='yes' />
+            <RegistryValue Root="HKCR" Key="CLSID\{25CBA31C-951A-48C6-B513-012E1E2D09D8}" Value="TortugASIO x64" Type="string" Action="write" />
+            <RegistryValue Root="HKCR" Key="CLSID\{25CBA31C-951A-48C6-B513-012E1E2D09D8}\InprocServer32" Value="[INSTALLDIR]TortugASIOx64.dll" Type="string" Action="write" />
+            <RegistryValue Root="HKCR" Key="CLSID\{25CBA31C-951A-48C6-B513-012E1E2D09D8}\InprocServer32" Name="ThreadingModel" Value="Apartment" Type="string" Action="write" />
+            <RegistryValue Root="HKLM" Key="Software\ASIO\TortugASIO AudioXtreamer" Name="CLSID" Value="{25CBA31C-951A-48C6-B513-012E1E2D09D8}" Type="string" Action="write" />
+            <RegistryValue Root="HKLM" Key="Software\ASIO\TortugASIO AudioXtreamer" Name="Description" Value="TortugASIO x64" Type="string" Action="write" />
+          </Component>
+        </Directory>
+      </Directory>
+
+      <Directory Id="ProgramMenuFolder" Name="Programs">
+        <Directory Id="ProgramMenuDir" Name="AudioXtreamer">
+          <Component Id="ProgramMenuDir" Guid="*">
+            <RemoveFolder Id='ProgramMenuDir' On='uninstall' />
+            <RegistryValue Root='HKCU' Key='Software\[ProductName]' Type='string' Value='' KeyPath='yes' />
+          </Component>
+        </Directory>
+      </Directory>
+
+      <Directory Id="StartupFolder" Name="Startup" />
+    </Directory>
+
+    <Icon Id="AudioXtreamer.exe" SourceFile="..\AudioXtreamer\Release\AudioXtreamer.exe" />
+    <Property Id="ARPPRODUCTICON" Value="AudioXtreamer.exe" />
+
+    <Feature Id='Complete' Level='1'>
+      <ComponentRef Id='MainExecutable' />
+      <ComponentRef Id='HelperLibrary' />
+      <ComponentRef Id='HelperLibrary64' />
+      <ComponentRef Id='ProgramMenuDir' />
+    </Feature>
+
+  </Product>
+</Wix>
