@@ -10,10 +10,10 @@ library IEEE;
   use work.common_types.all;
   use work.simtools.all;
 
-entity tb_midi_to_usb_pkt is
+entity tb_usb_midi_in is
 end entity;
 
-architecture rtl of tb_midi_to_usb_pkt is
+architecture rtl of tb_usb_midi_in is
   signal clk: std_logic;
   signal rst: std_logic;
   --midi bytes source
@@ -27,11 +27,6 @@ architecture rtl of tb_midi_to_usb_pkt is
   signal s_data   : std_logic_vector(31 downto 0);
   
   signal serial   : std_logic;--loopback
-
-  procedure echol(arg          : in string := "") is
-  begin
-    std.textio.write(std.textio.output, arg & LF);
-  end procedure echol;
 
 begin
 

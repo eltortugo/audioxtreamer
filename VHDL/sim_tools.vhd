@@ -18,6 +18,7 @@ package simtools is
     constant off_clks: natural;
     constant repeat : boolean
   );
+  procedure echol(arg          : in string := "");
 end package;
 
 package body simtools is
@@ -101,5 +102,10 @@ begin
     end if;
   end loop;
 end procedure;
+
+procedure echol(arg          : in string := "") is
+begin
+  std.textio.write(std.textio.output, arg & LF);
+end procedure echol;
 
 end simtools;
