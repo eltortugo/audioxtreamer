@@ -10,7 +10,7 @@ library axi_uartlite_v1_02_a;
 entity uart_rx is
   generic 
   (
-    C_FAMILY         : string               := "virtex6";
+    C_FAMILY         : string;
     C_DATA_BITS      : integer range 5 to 8 := 8;
     C_USE_PARITY     : integer range 0 to 1 := 0;
     C_ODD_PARITY     : integer range 0 to 1 := 0
@@ -84,7 +84,7 @@ library axi_uartlite_v1_02_a;
 entity uart_tx is
   generic 
   (
-    C_FAMILY         : string               := "virtex6";
+    C_FAMILY         : string;
     C_DATA_BITS      : integer range 5 to 8 := 8;
     C_USE_PARITY     : integer range 0 to 1 := 0;
     C_ODD_PARITY     : integer range 0 to 1 := 0
@@ -157,13 +157,15 @@ library axi_uartlite_v1_02_a;
 
 entity midi_io is
   generic ( 
-    NR_CHANNELS: INTEGER := 7
+    NR_CHANNELS: INTEGER := 7;
+    F_CLK      : integer := 48_000_000;
+    BAUDRATE   : integer := 31250
   );
   port (
     clk  : in STD_LOGIC;
     reset: in STD_LOGIC;
     rx      : in  STD_LOGIC_VECTOR( NR_CHANNELS downto 1);
-    rx_data : out slv8_array;
+    rx_data : out slv32_array;
     rx_valid: out STD_LOGIC_VECTOR( NR_CHANNELS downto 1);
     rx_ready: in  STD_LOGIC_VECTOR( NR_CHANNELS downto 1);
     rx_fifo_reset : in std_logic;
@@ -183,8 +185,8 @@ architecture rtl of midi_io is
     constant C_BAUDRATE_16_BY_2: integer := (16 * C_BAUDRATE) / 2;
     constant REMAINDER         : integer := 
     C_S_AXI_ACLK_FREQ_HZ rem (16 * C_BAUDRATE);
-    constant RATIO             : integer := 
-    C_S_AXI_ACLK_FREQ_HZ / (16 * C_BAUDRATE);   
+    constant RATIO             : integer :=
+    C_S_AXI_ACLK_FREQ_HZ / (16 * C_BAUDRATE);
 
   begin
     if (C_BAUDRATE_16_BY_2 < REMAINDER) then
@@ -194,14 +196,17 @@ architecture rtl of midi_io is
     end if;
   end function CALC_RATIO;
 
-   constant RATIO         : integer := CALC_RATIO( 48_000_000, 31250 );
+   constant RATIO         : integer := CALC_RATIO( F_CLK, BAUDRATE );
    constant C_FAMILY      : string := "spartan6";
    constant C_DATA_BITS   : integer := 8;
    constant C_USE_PARITY  : integer := 0;
    constant C_ODD_PARITY  : integer := 0;
 
    signal en_16x_Baud     : std_logic;
-   
+   signal rd_tready       : std_logic_vector( NR_CHANNELS downto 1);
+   signal rd_tvalid       : std_logic_vector( NR_CHANNELS downto 1);
+   signal rd_tdata        : slv8_array( NR_CHANNELS downto 1);
+
 begin
 
   BAUD_RATE_I : entity axi_uartlite_v1_02_a.baudrate
@@ -230,12 +235,28 @@ begin
         Reset        => Reset,
         EN_16x_Baud  => EN_16x_Baud,
         RX           => RX(I),
-        ready        => rx_ready(I),
-        data         => rx_data(I),
-        valid        => rx_valid(I),
+        ready        => rd_tready(I),
+        data         => rd_tdata (I),
+        valid        => rd_tvalid(I),
         fifo_reset   => rx_fifo_reset
       );
     
+    midi_to_usb_pkt_inst: entity work.usb_midi_in
+      generic map (
+        wire => I-1
+      )
+      port map (
+        clk           => clk,
+        rst           => Reset,
+        m_axis_tdata  => rx_data  (I),
+        m_axis_tvalid => rx_valid (I),
+        m_axis_tready => rx_ready (I),
+        s_axis_tdata  => rd_tdata (I),
+        s_axis_tvalid => rd_tvalid(I),
+        s_axis_tready => rd_tready(I)
+      );
+
+
     uart_tx_inst: entity work.uart_tx
       generic map (
         C_FAMILY     => C_FAMILY,

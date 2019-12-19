@@ -6,7 +6,7 @@ library ieee;
   use work.common_types.all;
 
 
-entity SamplingRateDetect is
+entity sampling_rate_detect is
   generic ( gate_length : positive := 2400000 );
   port(
     clk        : in std_logic;
@@ -14,9 +14,9 @@ entity SamplingRateDetect is
     pcm_clk   : in std_logic;
     sr_count   : out slv_16
   );
-end SamplingRateDetect;
+end sampling_rate_detect;
 
-architecture behavioral of SamplingRateDetect is
+architecture behavioral of sampling_rate_detect is
   signal run : std_logic := '0';
   signal gate_counter_i   : natural range 0 to gate_length := 0;
   signal sample_counter_i : slv_16 := (others => '0');

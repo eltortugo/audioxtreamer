@@ -240,7 +240,7 @@ int ztex_xlabs_init_fifos(HANDLE handle) {
 * @return 0 on success or <0 if an USB error occurred
 */
 int ztex_default_lsi_set1(HANDLE handle, uint8_t addr, uint32_t val) {
-  uint8_t buf[] = { (uint8_t)(val), (uint8_t)(val >> 8), (uint8_t)(val >> 16), (uint8_t)(val >> 24), addr };
+  uint8_t buf[] = { addr, (uint8_t)(val), (uint8_t)(val >> 8), (uint8_t)(val >> 16), (uint8_t)(val >> 24) };
   int status;
   TWO_TRIES(status, (int)control_transfer(handle, 0x40, 0x62, 0, 0, buf, 5, 1500));
   return status;
@@ -264,11 +264,11 @@ int ztex_default_lsi_set2(HANDLE handle, uint8_t addr, const uint32_t *val, int 
   if (ia<0) ia = 0;
   uint8_t *buf = (uint8_t *)malloc((length - ia) * 5);
   for (int i = ia; i<length; i++) {
-    buf[(i - ia) * 5 + 0] = val[i];
-    buf[(i - ia) * 5 + 1] = val[i] >> 8;
-    buf[(i - ia) * 5 + 2] = val[i] >> 16;
-    buf[(i - ia) * 5 + 3] = val[i] >> 24;
-    buf[(i - ia) * 5 + 4] = addr + i;
+    buf[(i - ia) * 5 + 0] = addr + i;
+    buf[(i - ia) * 5 + 1] = val[i];
+    buf[(i - ia) * 5 + 2] = val[i] >> 8;
+    buf[(i - ia) * 5 + 3] = val[i] >> 16;
+    buf[(i - ia) * 5 + 4] = val[i] >> 24;
   }
   int status;
   TWO_TRIES(status, (int)control_transfer(handle, 0x40, 0x62, 0, 0, buf, (length - ia) * 5, 1500));
@@ -294,12 +294,12 @@ int ztex_default_lsi_set3(HANDLE handle, const uint8_t *addr, const uint32_t *va
   if (ia<0) ia = 0;
   uint8_t *buf = (uint8_t *)malloc((length - ia) * 5);
   for (int i = ia; i<length; i++) {
-    buf[(i - ia) * 5 + 0] = val[i];
-    buf[(i - ia) * 5 + 1] = val[i] >> 8;
-    buf[(i - ia) * 5 + 2] = val[i] >> 16;
-    buf[(i - ia) * 5 + 3] = val[i] >> 24;
-    buf[(i - ia) * 5 + 4] = addr[i];
-  }
+    buf[(i - ia) * 5 + 0] = addr[i];
+    buf[(i - ia) * 5 + 1] = val[i];
+    buf[(i - ia) * 5 + 2] = val[i] >> 8;
+    buf[(i - ia) * 5 + 3] = val[i] >> 16;
+    buf[(i - ia) * 5 + 4] = val[i] >> 24;
+  }                         
   int status;
   TWO_TRIES(status, (int)control_transfer(handle, 0x40, 0x62, 0, 0, buf, (length - ia) * 5, 1500));
   free(buf);

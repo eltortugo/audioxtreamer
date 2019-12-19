@@ -47,7 +47,7 @@ begin
  
 
 
-uut : entity work.samplingratedetect
+uut : entity work.sampling_rate_detect
   generic map ( gate_length => 2400000 )
   port map (
     rst       => reset,

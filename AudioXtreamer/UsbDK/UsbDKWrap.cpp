@@ -4,8 +4,24 @@
 #include "UsbBackend.h"
 
 
+struct usbdk_lib {
+  HMODULE module;
 
-usbdk_lib UsbDk;
+  USBDK_GET_DEVICES_LIST			GetDevicesList;
+  USBDK_RELEASE_DEVICES_LIST		ReleaseDevicesList;
+  USBDK_START_REDIRECT			StartRedirect;
+  USBDK_STOP_REDIRECT			StopRedirect;
+  USBDK_GET_CONFIGURATION_DESCRIPTOR	GetConfigurationDescriptor;
+  USBDK_RELEASE_CONFIGURATION_DESCRIPTOR	ReleaseConfigurationDescriptor;
+  USBDK_READ_PIPE				ReadPipe;
+  USBDK_WRITE_PIPE			WritePipe;
+  USBDK_ABORT_PIPE			AbortPipe;
+  USBDK_RESET_PIPE			ResetPipe;
+  USBDK_SET_ALTSETTING			SetAltsetting;
+  USBDK_RESET_DEVICE			ResetDevice;
+  USBDK_GET_REDIRECTOR_SYSTEM_HANDLE	GetRedirectorSystemHandle;
+} UsbDk;
+
 
 static FARPROC get_usbdk_proc_addr(LPCSTR api_name)
 {
@@ -365,6 +381,11 @@ bool usbdk_xfer_cleanup(XferReq* req)
 
   return true;
 }
+
+bool usbdk_abort_pipe(HANDLE handle, uint8_t ep)
+{
+  return UsbDk.AbortPipe(handle, ep);
+}
 /*
 bool usbdk_bulk_xfer(XferReq* req)
 {
@@ -388,4 +409,5 @@ const USB_BACKEND_XFER bknd_iso_read            = usbdk_iso_read;
 const USB_BACKEND_XFER bknd_iso_write           = usbdk_iso_write;
 const USB_BACKEND_ISO_GET_RESULT bknd_iso_get_result = usbdk_iso_result;
 const USB_BACKEND_XFER bknd_xfer_cleanup = usbdk_xfer_cleanup;
+const USB_BACKEND_ABORT bknd_abort_pipe = usbdk_abort_pipe;
 */

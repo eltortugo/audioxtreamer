@@ -157,26 +157,4 @@ typedef HANDLE(__cdecl *USBDK_GET_REDIRECTOR_SYSTEM_HANDLE)(
   HANDLE DeviceHandle
   );
 
-struct usbdk_lib {
-  HMODULE module;
-
-  USBDK_GET_DEVICES_LIST			GetDevicesList;
-  USBDK_RELEASE_DEVICES_LIST		ReleaseDevicesList;
-  USBDK_START_REDIRECT			StartRedirect;
-  USBDK_STOP_REDIRECT			StopRedirect;
-  USBDK_GET_CONFIGURATION_DESCRIPTOR	GetConfigurationDescriptor;
-  USBDK_RELEASE_CONFIGURATION_DESCRIPTOR	ReleaseConfigurationDescriptor;
-  USBDK_READ_PIPE				ReadPipe;
-  USBDK_WRITE_PIPE			WritePipe;
-  USBDK_ABORT_PIPE			AbortPipe;
-  USBDK_RESET_PIPE			ResetPipe;
-  USBDK_SET_ALTSETTING			SetAltsetting;
-  USBDK_RESET_DEVICE			ResetDevice;
-  USBDK_GET_REDIRECTOR_SYSTEM_HANDLE	GetRedirectorSystemHandle;
-};
-
-extern struct usbdk_lib UsbDk;
-
-bool load_usbdk();
-void unload_usbdk();
 
