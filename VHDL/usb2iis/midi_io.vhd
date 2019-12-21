@@ -171,9 +171,9 @@ entity midi_io is
     rx_fifo_reset : in std_logic;
 
     tx      : out STD_LOGIC_VECTOR( NR_CHANNELS downto 1);
-    tx_data : in  slv8_array;
-    tx_ready: out STD_LOGIC_VECTOR( NR_CHANNELS downto 1);
-    tx_valid: in  STD_LOGIC_VECTOR( NR_CHANNELS downto 1)
+    tx_data : in  slv_32;
+    tx_ready: out std_logic;
+    tx_valid: in  std_logic
   );
 end midi_io;
 
@@ -207,6 +207,15 @@ architecture rtl of midi_io is
    signal rd_tvalid       : std_logic_vector( NR_CHANNELS downto 1);
    signal rd_tdata        : slv8_array( NR_CHANNELS downto 1);
 
+
+   signal m_tvalid : std_logic_vector( NR_CHANNELS downto 1);
+   signal m_tdata  : slv8_array( NR_CHANNELS downto 1);
+   signal m_tready : std_logic_vector( NR_CHANNELS downto 1);
+
+   signal s_tvalid : std_logic_vector( NR_CHANNELS downto 1);
+   signal s_tready : std_logic_vector( NR_CHANNELS downto 1);
+
+
 begin
 
   BAUD_RATE_I : entity axi_uartlite_v1_02_a.baudrate
@@ -220,6 +229,7 @@ begin
       Reset        => Reset,
       EN_16x_Baud  => en_16x_Baud
     );
+
 
   g_uart_xcvrs : for I in 1 to NR_CHANNELS generate
 
@@ -240,14 +250,14 @@ begin
         valid        => rd_tvalid(I),
         fifo_reset   => rx_fifo_reset
       );
-    
-    midi_to_usb_pkt_inst: entity work.usb_midi_in
+
+    i_usb_midi_in: entity work.usb_midi_in
       generic map (
         wire => I-1
       )
       port map (
         clk           => clk,
-        rst           => Reset,
+        rst           => reset,
         m_axis_tdata  => rx_data  (I),
         m_axis_tvalid => rx_valid (I),
         m_axis_tready => rx_ready (I),
@@ -256,6 +266,19 @@ begin
         s_axis_tready => rd_tready(I)
       );
 
+    s_tvalid(I) <= '1' when tx_valid = '1' and unsigned(tx_data(7 downto 4))  = to_unsigned(I-1,4) else '0';
+
+    i_usb_midi_out: entity work.usb_midi_out
+      port map (
+        clk           => clk,
+        rst           => reset,
+        s_axis_tdata  => tx_data,
+        s_axis_tvalid => s_tvalid(I),
+        s_axis_tready => s_tready(I),
+        m_axis_tdata  => m_tdata (I),
+        m_axis_tvalid => m_tvalid(I),
+        m_axis_tready => m_tready(I)
+      );
 
     uart_tx_inst: entity work.uart_tx
       generic map (
@@ -269,9 +292,21 @@ begin
         Reset        => Reset,
         EN_16x_Baud  => EN_16x_Baud,
         TX           => TX(I),
-        ready        => tx_ready(I),
-        data         => tx_data(I),
-        valid        => tx_valid(I)
+        ready        => m_tready(I),
+        data         => m_tdata (I),
+        valid        => m_tvalid(I)
       );
   end generate;
+
+  --ready
+  p_tready: process(tx_valid,tx_data,s_tready)
+  begin
+    tx_ready <= '0';
+    for I in 1 to NR_CHANNELS loop
+      if tx_valid = '1' and unsigned(tx_data(7 downto 4))  = to_unsigned(I-1,4) then
+        tx_ready <= s_tready(I);
+      end if;
+    end loop;
+  end process;
+
 end architecture rtl;

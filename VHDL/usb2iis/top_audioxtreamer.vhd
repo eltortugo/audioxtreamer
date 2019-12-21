@@ -35,7 +35,7 @@ use UNISIM.VComponents.all;
 use work.common_types.all;
 ------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------
-entity CY16_to_IIS is
+entity top_audioxtreamer is
 generic(
 sdi_lines   : positive := 12;
 sdo_lines   : positive := 12
@@ -55,6 +55,7 @@ sdo_lines   : positive := 12
     lsi8_dio    : inout std_logic_vector(7 downto 0);
 
     ez_int      : out std_logic;
+    ez_bsy      : out std_logic;
     --yamaha external clock and word clock
     ain         : in std_logic_vector( 11 downto 0);
     aout        : out std_logic_vector( 11 downto 0);
@@ -66,11 +67,11 @@ sdo_lines   : positive := 12
     midi_rx     : in std_logic_vector( 5 downto 1 );
     midi_tx     : out std_logic_vector( 5 downto 1 )
     );
-end CY16_to_IIS;
+end top_audioxtreamer;
 ------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------
 
-architecture Behavioral of CY16_to_IIS is
+architecture rtl of top_audioxtreamer is
 
 constant max_nr_outputs : natural := sdo_lines*2;
 constant max_nr_inputs : natural := sdi_lines*2;
@@ -160,17 +161,15 @@ signal lsi_wr         : std_logic;
 signal reg_sr_count   : slv_16;
 signal reg_ch_params  : slv_32;
 
-signal midi_in_data : slv32_array(1 to 7) ;
-signal midi_in_valid : std_logic_vector(7 downto 1);
-signal midi_in_ready : std_logic_vector(7 downto 1);
-signal midi_in_valid_r:std_logic_vector(7 downto 1);
+signal midi_in_data   : slv32_array(1 to 7) ;
+signal midi_in_valid  : std_logic_vector(7 downto 1);
+signal midi_in_ready  : std_logic_vector(7 downto 1);
+signal midi_in_valid_r: std_logic_vector(7 downto 1);
 
-signal midi_out : slv8_array( 1 to 7);
-signal midi_out_valid : std_logic_vector(7 downto 1);
-signal midi_out_ready : std_logic_vector(7 downto 1);
-signal midi_7_6_tx : std_logic_vector(1 downto 0); --null
-signal midi_out_valid_8: std_logic; --null
-signal midi_out_8: slv_8;--null
+signal midi_out_valid : std_logic;
+signal midi_out_ready : std_logic;
+signal midi_out_busy  : std_logic;
+signal midi_out_sink  : std_logic_vector(1 downto 0);
 
 
 constant cookie_str :string := "TRTG";
@@ -361,10 +360,8 @@ port map (
   out_fifo_wr   => rcvr_wr,
   out_fifo_data => rcvr_data,
 
-  midi_out_wr(6 downto 0) => midi_out_valid,
-  midi_out_wr(7) => midi_out_valid_8,
-  midi_out_data(0 to 6) => midi_out,
-  midi_out_data(7) => midi_out_8
+  midi_out_wr => open,
+  midi_out_data => open
 );
 ------------------------------------------------------------------------------------------------------------
 io_reset <= '1' when  usb_reset = '1' or (lsi_wr = '1' and lsi_wr_addr = X"04") else '0';
@@ -553,6 +550,24 @@ i_s_axis_to_w_fifo: entity work.s_axis_to_w_fifo
     s_axis_tdata  => in_axis_tdata
   );
 ------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------
+--lsi_8 to axis adapter, is just a latch/busy flag to inform the ezusb when the command has not been dispatched
+
+my_process_ssp: process (usb_clk)
+begin
+  if rising_edge(usb_clk) then
+    if usb_reset = '1' or midi_out_ready = '1' then
+      midi_out_busy <= '0';
+    elsif lsi_wr ='1' and lsi_wr_addr = x"10" and midi_out_ready = '0' then
+      midi_out_busy <= '1';
+    end if;
+  end if;
+end process;
+
+ez_bsy <= midi_out_busy;
+
+midi_out_valid <= '1' when (lsi_wr ='1' and lsi_wr_addr = x"10") or midi_out_busy = '1' else '0';
+------------------------------------------------------------------------------------------------------------
 i_midi_io : entity work.midi_io
 generic map ( NR_CHANNELS => 7 )
 port map
@@ -568,11 +583,11 @@ port map
   rx_fifo_reset   => usb_reset,
 
   tx(5 downto 1)  => midi_tx,
-  tx(7 downto 6)  => midi_7_6_tx,
-  tx_data         => midi_out,
-  tx_ready        => midi_out_ready,
-  tx_valid        => midi_out_valid
+  tx(7 downto 6)  => midi_out_sink,
+  tx_data         => lsi_wr_data,
+  tx_valid        => midi_out_valid,
+  tx_ready        => midi_out_ready
 );
 
 ------------------------------------------------------------------------------------------------------------
-end Behavioral;
+end rtl;

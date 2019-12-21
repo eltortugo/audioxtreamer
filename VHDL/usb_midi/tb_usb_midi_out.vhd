@@ -126,18 +126,10 @@ begin
 --pitch bend
     tx_pkt((X"0e",x"e2",x"0f",x"10"));
     expect(      (x"e2",x"0f",x"10"));
---runnin status on pitch bend
+--running status on pitch bend
     tx_pkt((X"0e",x"e2",x"11",x"12"));
     expect(            (x"11",x"12"));
 
-
-
-
-
-    wait until rising_edge(clk);
-
-    wait;
-    
   end process;
 
 

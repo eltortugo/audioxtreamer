@@ -76,6 +76,7 @@ NET "lsi8_dio<7>" LOC = "R5"  | IOSTANDARD = LVCMOS33 | PULLDOWN; # PC7/GPIFADR7
 NET "lsi8_rdnck"LOC = "R11" | IOSTANDARD = LVCMOS33 | PULLDOWN; # PA0
 NET "lsi8_en"   LOC = "T10" | IOSTANDARD = LVCMOS33 | PULLDOWN; # PA1
 NET "ez_int"    LOC = "A5"  | IOSTANDARD = LVCMOS33           ; # PE5
+NET "ez_bsy"    LOC = "B6"  | IOSTANDARD = LVCMOS33           ; # PE4
 
 
 

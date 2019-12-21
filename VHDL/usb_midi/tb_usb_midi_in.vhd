@@ -25,7 +25,11 @@ architecture rtl of tb_usb_midi_in is
   signal s_valid  : std_logic;
   signal s_ready  : std_logic;
   signal s_data   : std_logic_vector(31 downto 0);
-  
+
+  signal m_tvalid  : std_logic;
+  signal m_tready  : std_logic;
+  signal m_tdata   : std_logic_vector(31 downto 0);
+
   signal serial   : std_logic;--loopback
 
 begin
@@ -37,14 +41,13 @@ begin
 
   procedure tx_byte(byte : std_logic_vector(7 downto 0)) is
   begin
-    loop
-      wait until rising_edge(clk);
-      if tx_ready = '1' then
-        tx_data <= byte;
-        tx_valid  <= '1';
-        exit;
-      end if;
-    end loop;
+    tx_data <= byte;
+    tx_valid  <= '1';
+    if tx_ready = '0' then
+      wait until tx_ready = '1';
+    end if;
+    wait until rising_edge(clk);
+    wait for 1 ps;
   end procedure;
 
   procedure expect( pkt: std_logic_vector(31 downto 0)) is
@@ -66,15 +69,19 @@ begin
     tx_byte(X"20");
     tx_byte(X"30");
     tx_byte(X"40");
-    wait until rising_edge(clk);
     tx_valid  <= '0';
-    wait until s_valid = '1';
+
+    if s_valid = '0' then
+      wait until s_valid = '1';
+    end if;
     assert s_data = X"2010" & msg & x"0" & code report "FAIL: 3b msg" severity error;
     echol( "msg: 0x" & to_hstring( s_data ));
     wait until rising_edge(clk);
     wait for 1 ps;
     assert s_valid = '0' report "FAIL: valid didnt deassert after successful read" severity error;
-    wait until s_valid = '1';
+    if s_valid = '0' then
+      wait until s_valid = '1';
+    end if;
     assert s_data = X"4030" & msg & x"0" & code  report "FAIL: 3b msg running status" severity error;
     echol( "msg: 0x" & to_hstring( s_data ));
     wait until rising_edge(clk);
@@ -188,7 +195,10 @@ begin
     wait;
   end process;
   
-  -- we test by entering the raw midi packets in the midi io xmtr and looping back the serial data to the rcvr
+  -- we test by entering the raw midi packets in the midi to usb block ,
+  -- then into the midi io where it will be converted again back into midi,
+  -- serial loopback back to midi back to usb midi
+  
 
   
   i_uut: entity work.midi_io
@@ -205,10 +215,27 @@ begin
       rx_ready(1) => s_ready,
       rx_fifo_reset => rst,
       tx(1)       => serial,
-      tx_data(1)  => tx_data,
-      tx_ready(1) => tx_ready,
-      tx_valid(1) => tx_valid
+      tx_data     => m_tdata,
+      tx_ready    => m_tready,
+      tx_valid    => m_tvalid
     );
+  
+  usb_midi_in_inst: entity work.usb_midi_in
+    generic map (
+      wire          => 0
+    )
+    port map (
+      clk           => clk,
+      rst           => rst,
+      m_axis_tdata  => m_tdata,
+      m_axis_tvalid => m_tvalid,
+      m_axis_tready => m_tready,
+      s_axis_tdata  => tx_data,
+      s_axis_tvalid => tx_valid,
+      s_axis_tready => tx_ready
+    );
+
+
 
 
 end architecture;
