@@ -249,7 +249,7 @@
     <ResourceCompile Include="AudioXtreamer.rc" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\..\FPGA\ZTEX201\USB32chAudio\cy16_to_iis.bin" />
+    <None Include="..\..\FPGA\ZTEX201\USB32chAudio\top_audioxtreamer.bin" />
     <None Include="res\AudioXtreamer.rc2" />
   </ItemGroup>
   <ItemGroup>

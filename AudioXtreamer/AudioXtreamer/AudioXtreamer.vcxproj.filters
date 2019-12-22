@@ -143,7 +143,7 @@
     <None Include="res\AudioXtreamer.rc2">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="..\..\FPGA\ZTEX201\USB32chAudio\cy16_to_iis.bin">
+    <None Include="..\..\FPGA\ZTEX201\USB32chAudio\top_audioxtreamer.bin">
       <Filter>Resource Files</Filter>
     </None>
   </ItemGroup>
