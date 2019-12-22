@@ -208,7 +208,6 @@
     <ClInclude Include="..\..\libs\ntray\NTray.h" />
     <ClInclude Include="..\..\libs\simpleini\SimpleIni.h" />
     <ClInclude Include="..\FX2LP\CypressDevice.h" />
-    <ClInclude Include="..\midi\midi.h" />
     <ClInclude Include="..\UsbDev\UsbDev.h" />
     <ClInclude Include="..\UsbDK\UsbDKWrap.h" />
     <ClInclude Include="..\WinUSB\WinUSBHelper.h" />
@@ -230,7 +229,6 @@
   <ItemGroup>
     <ClCompile Include="..\..\libs\ntray\NTray.cpp" />
     <ClCompile Include="..\FX2LP\CypressDevice.cpp" />
-    <ClCompile Include="..\midi\midi.cpp" />
     <ClCompile Include="..\UsbDev\UsbDev.cpp" />
     <ClCompile Include="..\UsbDK\UsbDKWrap.cpp" />
     <ClCompile Include="..\WinUSB\WinUSBHelper.cpp" />

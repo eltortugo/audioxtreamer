@@ -73,7 +73,7 @@ private:
   HANDLE mFileHandle;
   HANDLE hSem;
   UsbDeviceStatus mDevStatus;
-  MidiIO midi;
+
 
   //the Sample where IsoIn data gets transfered
   uint8_t RxBuff;

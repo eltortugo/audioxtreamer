@@ -27,9 +27,6 @@
     <Filter Include="Source Files\libs\Simpleini">
       <UniqueIdentifier>{a262fe11-44f7-4e5e-8917-51debf88b4d3}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\midi">
-      <UniqueIdentifier>{e15fbdde-1bb2-423c-9007-2d7178315d61}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Source Files\UsbBknd">
       <UniqueIdentifier>{b406dc6f-17f1-470c-8292-7802db522f29}</UniqueIdentifier>
     </Filter>
@@ -95,9 +92,6 @@
     <ClInclude Include="UsbBackend.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\midi\midi.h">
-      <Filter>Source Files\midi</Filter>
-    </ClInclude>
     <ClInclude Include="..\WinUSB\WinUSBHelper.h">
       <Filter>Source Files\UsbBknd</Filter>
     </ClInclude>
@@ -135,9 +129,6 @@
     </ClCompile>
     <ClCompile Include="PropertySheetDlg.cpp">
       <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\midi\midi.cpp">
-      <Filter>Source Files\midi</Filter>
     </ClCompile>
     <ClCompile Include="..\WinUSB\WinUSBHelper.cpp">
       <Filter>Source Files\UsbBknd</Filter>

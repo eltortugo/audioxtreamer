@@ -188,10 +188,10 @@ bool CypressDevice::Open()
   mDefInEP = info.default_in_ep;
   mDefOutEP = info.default_out_ep;
 
-  status = ztex_get_fpga_config(handle);
+  /*status = ztex_get_fpga_config(handle);
   if (status == -1)
     goto err;
-  else if (status == 0)
+  else if (status == 0)*/
   {
 
    if (mBitstream != nullptr) {
@@ -354,7 +354,6 @@ bool CypressDevice::ProcessHdr(uint8_t* pHdr)
     mDevStatus.OutSkipCount = hdr->OutSkipCount;
     mDevStatus.InFullCount  = hdr->InFullCount;
 
-    midi.MidiIn(hdr->midi_in);
     return true;
   }
   return false;
@@ -387,7 +386,7 @@ void CypressDevice::InitTxHeaders(uint8_t* ptr, uint32_t Samples)
 
 //---------------------------------------------------------------------------------------------
 static const uint16_t rxpktSize = 1024;
-static const uint16_t rxpktCount = 8;
+static const uint16_t rxpktCount = 16;
 static const uint16_t IsoSize = rxpktCount * rxpktSize;
 static const uint16_t precharge = 44;
 
@@ -462,17 +461,10 @@ void CypressDevice::main()
   mRxRequests = RxRequests;
   mTxRequests = TxRequests;
 
-  //CALL PROC
-  midi.Init();
 
-  auto InitFpga = [this](uint32_t params)
-  {
-    uint32_t status = ztex_xlabs_init_fifos(mDevHandle);
-    status = ztex_default_lsi_set1(mDevHandle, 4, params);
-    return status;
-  };
+  uint32_t status = ztex_xlabs_init_fifos(mDevHandle);
+  status = ztex_default_lsi_set1(mDevHandle, 4, ch_params.u32);
 
-  InitFpga(ch_params.u32);
 
   for (uint32_t c = 0; c < NrXfers; ++c)
   {
@@ -528,7 +520,7 @@ void CypressDevice::main()
   HANDLE timerH = CreateWaitableTimer(NULL, FALSE, nullptr);
   LARGE_INTEGER li;
   li.QuadPart = -10 *1000000;
-  SetWaitableTimer(timerH, &li, 1000, NULL, NULL, false);
+  SetWaitableTimer(timerH, &li, 100, NULL, NULL, false);
   
   bool ErrorBreak = false;
 
@@ -604,15 +596,6 @@ void CypressDevice::TxIsochCB()
         uint16_t txIsoSize = IsoSize;
         uint8_t* ptr = TxReq.buff;
 
-        for (uint8_t c = 0; c < rxpktCount / 8; ++c)
-        {
-          if (uint8_t s = midi.MidiOut(ptr))
-          {
-            ptr += s;
-            txIsoSize -= s;
-          }
-        }
-
         uint16_t TxSamples = min(IsoTxSamples, txIsoSize / OUTStride);
 
         //partial TxBuff
@@ -680,8 +663,22 @@ void CypressDevice::TxIsochCB()
 void CypressDevice::TimerCB()
 {
   //LOGN(" %u Samples/sec\r", sSampleCounter);
-  mDevStatus.SwSR = sSampleCounter;
+  mDevStatus.SwSR = sSampleCounter*10;
   sSampleCounter = 0;
+
+  /*int64_t get_result = ztex_default_lsi_get1(mDevHandle, 32);
+  if (get_result < 0)
+    return;
+  LOGN("lsi 0x%02x, 0x%08x\n", 0x20, (uint32_t)get_result);
+  uint8_t flags = (uint8_t)get_result;
+  for (uint8_t c = 0; c < 7; c++) {
+    if (flags & 1)
+    {
+      get_result = ztex_default_lsi_get1(mDevHandle, 33 + c);
+      LOGN("lsi 0x%02x, 0x%08x\n", 0x21 + c, (uint32_t)get_result);
+    }
+    flags >>= 1;
+  } */
 }
 
 //---------------------------------------------------------------------------------------------
