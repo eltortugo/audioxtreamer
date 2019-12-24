@@ -1,22 +1,7 @@
-----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
--- 
--- Create Date: 07/12/2018 01:13:41 AM
--- Design Name: 
--- Module Name: FIFO2IIC - Behavioral
--- Project Name: 
--- Target Devices: 
--- Tool Versions: 
--- Description: 
--- 
--- Dependencies: 
--- 
--- Revision:
--- Revision 0.01 - File Created
--- Additional Comments:
--- 
-----------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------
+-- Author:  Hector Soto, TurtleDesign
+
+------------------------------------------------------------------------------------------
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -129,9 +114,6 @@ signal out_fifo_skip : std_logic;
 signal out_fifo_skip_count : slv_16;
 --signal out_fifo_stats_reset : std_logic;
 
-signal xmtr_addr : natural;
-signal xmtr_data : slv_16;
-
 signal in_fifo_full_count : slv_16;
 signal in_fifo_wr_full : std_logic_vector((max_nr_inputs/3)-1 downto 0);
 signal in_fifo_wr_data: slv24_array(0 to max_nr_inputs-1);
@@ -217,7 +199,8 @@ ez_int <= '0' when midi_in_valid = 0 else '1';
 with lsi_rd_addr select lsi_rd_data <=
   cookie when X"00", -- the cookie
   X"00000001" when X"01", -- the current version of the fpga
-  x"0000" & reg_sr_count when X"02", -- sampling rate counter to detect the word clock
+  x"00" & rd_data_count(0) & reg_sr_count when X"02",           -- sampling rate counter to detect the word clock and the out fifo level
+  in_fifo_full_count & out_fifo_skip_count when X"03",  -- fifo empty /full counters
 
   X"000000"& '0' & midi_in_valid_r when X"10" | X"20",
   midi_in_data(1) when X"11" | X"21",
@@ -343,7 +326,7 @@ begin
 end process;
 
 ------------------------------------------------------------------------------------------------------------
-rcvr : entity work.cy16_to_fifo
+rcvr : entity work.isoch_audio_out
 generic map(
   max_sdo_lines => sdo_lines
 )
@@ -358,10 +341,7 @@ port map (
   nr_outputs  => reg_ch_params(3 downto 0),
   out_fifo_full => rcvr_fifo_full,
   out_fifo_wr   => rcvr_wr,
-  out_fifo_data => rcvr_data,
-
-  midi_out_wr => open,
-  midi_out_data => open
+  out_fifo_data => rcvr_data
 );
 ------------------------------------------------------------------------------------------------------------
 io_reset <= '1' when  usb_reset = '1' or (lsi_wr = '1' and lsi_wr_addr = X"04") else '0';
@@ -453,15 +433,6 @@ in_fifo_empty <= '0' when in_fifo_rd_empty = 0 else '1';
 
 ------------------------------------------------------------------------------------------------------------
 
-with xmtr_addr select xmtr_data <=
-  reg_sr_count                when 2,
-  X"00" & rd_data_count(0)    when 3,
-  out_fifo_skip_count         when 4,
-  in_fifo_full_count          when 5,
-  X"0000" when 6,
-  X"CDCD" when others;
-
-
 --latch the channels when reading @ 0005 to avoid sending data arrived after that
 p_midi_in_valid : process(usb_clk)
 begin
@@ -492,17 +463,13 @@ end process;
 ------------------------------------------------------------------------------------------------------------
 tx_reset <= '1' when reg_ch_params = 0 else '0';
 ------------------------------------------------------------------------------------------------------------
-xmtr: entity work.fifo_to_m_axis
+xmtr: entity work.isoch_audio_in
 generic map (
   max_sdi_lines => sdi_lines
 ) port map (
   --cypress interface
   clk  => usb_clk,
   reset=> tx_reset,
-
-  -- status report
-  data_in         => xmtr_data,
-  data_addr       => xmtr_addr,
 
   nr_inputs       => reg_ch_params(7 downto 4),
   sof_int         => '0',

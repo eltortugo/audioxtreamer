@@ -1,4 +1,8 @@
- library IEEE;
+------------------------------------------------------------------------------------------
+-- Author:  Hector Soto, TurtleDesign
+
+------------------------------------------------------------------------------------------
+library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 
 -- Uncomment the following library declaration if using
@@ -15,7 +19,7 @@ use UNISIM.VComponents.all;
 use work.common_types.all;
 ------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------
-entity cy16_to_fifo is
+entity isoch_audio_out is
 generic(
   max_sdo_lines: positive := 32
 );
@@ -35,16 +39,14 @@ generic(
 
     out_fifo_full : in std_logic;
     out_fifo_wr   : out std_logic;
-    out_fifo_data : out slv24_array(0 to (max_sdo_lines*2)-1);
+    out_fifo_data : out slv24_array(0 to (max_sdo_lines*2)-1)
 
-    midi_out_wr   : out slv_8;
-    midi_out_data : out slv8_array ( 0 to 7 )
     );
-end cy16_to_fifo;
+end entity;
 ------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------
 
-architecture rtl of cy16_to_fifo is
+architecture rtl of isoch_audio_out is
 
 signal rd_data : std_logic_vector(15 downto 0);
 
@@ -55,7 +57,7 @@ signal rvalid   : std_logic;
 signal reg_oe  : std_logic;
 
 -- RX FSM
-type rx_state_t is ( cmd, w0, w1, w2, midi);
+type rx_state_t is ( cmd, w0, w1, w2);
 signal rx_state : rx_state_t;
 --attribute fsm_encoding : string;
 --attribute fsm_encoding of rx_state : signal is "one-hot";
@@ -65,20 +67,11 @@ signal rx_state : rx_state_t;
 signal cmd_reg : slv_16;
 signal audio_valid: std_logic;
 
-signal midi_valid: std_logic;
-signal midi_done : std_logic;
-signal midi_sizes: slv_16;
-
 signal outs_counter, active_outs: natural range 0 to max_sdo_lines;
 
 -- out_fifo signals
 
 signal out_fifo_data_regs : slv24_array(0 to (max_sdo_lines*2)-1);
-signal midi_index : natural range 0 to 12;
-
-attribute keep : string;
-attribute keep of midi_valid : signal is "true";
-attribute keep of audio_valid : signal is "true";
 
 ------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------
@@ -136,8 +129,6 @@ begin
         if rvalid = '1' and active_outs /= 0 then
           if audio_valid = '1' then
             rx_state <= w0;
-          elsif midi_valid = '1' then
-            rx_state <= midi;
           end if;
         end if;
       when w0 =>
@@ -158,11 +149,6 @@ begin
             rx_state <= cmd;
           end if;
         end if;
-
-      when midi =>
-        if midi_done = '1' then 
-          rx_state <= cmd;
-        end if;
       end case;
 
     end if;
@@ -172,7 +158,7 @@ end process;
 ------------------------------------------------------------------------------------------------------------
 audio_valid <= '1' when rx_state = cmd and cmd_reg = X"55AA" and rd_data = X"AA55" else '0';
 ------------------------------------------------------------------------------------------------------------
-midi_valid  <= '1' when rx_state = cmd and cmd_reg = X"6996" and rd_data = X"9669" else '0';
+
 ------------------------------------------------------------------------------------------------------------
 process (usb_clk)
 begin
@@ -181,7 +167,7 @@ begin
       cmd_reg <= X"0000";
     elsif rx_state = cmd then
       if rvalid = '1' then
-        if audio_valid = '0' and midi_valid = '0' then
+        if audio_valid = '0' then
           cmd_reg <= rd_data;
         else
           cmd_reg <= X"0000" ; -- invalidate the header
@@ -236,62 +222,5 @@ rx_fifos : for i in 0 to max_sdo_lines-1 generate
   out_fifo_data((i*2)+1) <= out_fifo_data_regs((i*2)+1);
 
 end generate;
-
-midi_done <= '1' when midi_index = 12 else '0';
-
-p_midi_out :process (usb_clk)
-begin
-  if rising_edge(usb_clk) then
-
-    if rx_state = midi and midi_index < 12 then 
-      midi_index <= midi_index + 1;
-    else
-      midi_index <= 0;
-    end if;
-
-
-    midi_out_wr <= (others => '0');
-
-    if rx_state = midi then
-      if midi_index = 0 then
-        midi_sizes <= rd_data;
-      else
-
-        for i in 0 to 3 loop
-
-          midi_out_data(i*2) <= rd_data(7 downto 0);
-          midi_out_data(i*2+1) <= rd_data(15 downto 8);
-
-          if midi_index = i+1 then
-            if midi_sizes(i*4+1 downto i*4) > 0 then
-              midi_out_wr(i*2) <= '1';
-            end if;
-            if midi_sizes(i*4+3 downto i*4+2) > 0 then
-              midi_out_wr(i*2+1) <= '1';
-            end if;
-          end if;
-
-          if midi_index = i+5 then
-            if midi_sizes(i*4+1 downto i*4) > 1 then
-              midi_out_wr(i*2) <= '1';
-            end if;
-            if midi_sizes(i*4+3 downto i*4+2) > 1 then
-              midi_out_wr(i*2+1) <= '1';
-            end if;
-          end if;
-
-          if midi_index = i+9 then
-            if midi_sizes(i*4+1 downto i*4) > 2 then
-              midi_out_wr(i*2) <= '1';
-            end if;
-            if midi_sizes(i*4+3 downto i*4+2) > 2 then
-              midi_out_wr(i*2+1) <= '1';
-            end if;
-          end if;
-        end loop;
-      end if;
-    end if;
-  end if;
-end process;
 
 end rtl;

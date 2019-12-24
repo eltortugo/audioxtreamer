@@ -299,11 +299,9 @@ bool CypressDevice::IsPresent() {
 #define SNAP_TOLERANCE 100
 #define SNAP_TO_AND_RET(val,snapto) { if(val > (snapto - SNAP_TOLERANCE) && val < (snapto + SNAP_TOLERANCE)) return snapto; }
 
-constexpr auto ConvertSampleRate(uint32_t srReg)
+constexpr auto ConvertSampleRate(uint16_t srReg)
 {
-  uint16_t count = (uint16_t)(srReg & 0xFFFF);
-  uint16_t fract = (uint16_t)(srReg >> 16);
-  uint32_t sr = count * 10;
+  uint32_t sr = srReg * 10;
 
   SNAP_TO_AND_RET(sr, 44100);
   SNAP_TO_AND_RET(sr, 48000);
@@ -321,43 +319,7 @@ static const uint16_t Sine48[48] =
 4390, 2494, 1117, 280, 0, 280, 1117, 2494,
 4390, 6771, 9597, 12820, 16384, 20228, 24287, 28490 };
 
-#pragma pack (push,1)
-struct RxHeader
-{
-  uint16_t Hdr1;
-  uint16_t Hdr2;
-  uint16_t SamplingRate;
-  uint16_t FifoLevel;
-  uint16_t OutSkipCount;
-  uint16_t InFullCount;
-  uint8_t midi_in[8];
-};
-#pragma pack (pop)
-
 static const uint32_t scTxHeaderSize = 4;
-
-bool CypressDevice::ProcessHdr(uint8_t* pHdr)
-{
-  struct RxHeader* hdr = (struct RxHeader* )pHdr;
-
-  if (hdr->Hdr1 == 0xaaaa && hdr->Hdr2 == 0x5555)
-  {
-
-    uint32_t SR = ConvertSampleRate(hdr->SamplingRate);
-    if (mDevStatus.LastSR != SR && mDevStatus.LastSR != -1 && mDevStatus.LastSR != 0)
-    {
-      devClient.SampleRateChanged();
-    }
-    mDevStatus.LastSR = SR;
-
-    mDevStatus.FifoLevel    = hdr->FifoLevel;
-    mDevStatus.OutSkipCount = hdr->OutSkipCount;
-    mDevStatus.InFullCount  = hdr->InFullCount;
-
-    return true;
-  }
-  return false;
-};
 
 //initialize header mark
 void CypressDevice::InitTxHeaders(uint8_t* ptr, uint32_t Samples)
@@ -520,7 +482,7 @@ void CypressDevice::main()
   HANDLE timerH = CreateWaitableTimer(NULL, FALSE, nullptr);
   LARGE_INTEGER li;
   li.QuadPart = -10 *1000000;
-  SetWaitableTimer(timerH, &li, 100, NULL, NULL, false);
+  SetWaitableTimer(timerH, &li, 250, NULL, NULL, false);
   
   bool ErrorBreak = false;
 
@@ -528,13 +490,13 @@ void CypressDevice::main()
   {
 
     HANDLE events[4] = { mTxRequests[mTxReqIdx].ovlp.hEvent, mRxRequests[mRxReqIdx].ovlp.hEvent, timerH, mASIOHandle };
-    DWORD wfmo = WaitForMultipleObjects(mASIOHandle == NULL ? 3 : 4, events, false, 500);
+    DWORD wfmo = WaitForMultipleObjects(mASIOHandle == NULL ? 3 : 4, events, false, 200);
 
     switch (wfmo)
     {
-    case WAIT_OBJECT_0:     TxIsochCB();    break;//tx iso
+    case WAIT_OBJECT_0    : TxIsochCB();    break;//tx iso
     case WAIT_OBJECT_0 + 1: RxIsochCB();    break;//rx isoch
-    case WAIT_OBJECT_0 + 2: TimerCB(); break;//1sec timer
+    case WAIT_OBJECT_0 + 2: TimerCB();      break;// 1/5 sec timer
     case WAIT_OBJECT_0 + 3: AsioClientCB(); break;//ASIO ready
 
     default: //not good
@@ -663,13 +625,23 @@ void CypressDevice::TxIsochCB()
 void CypressDevice::TimerCB()
 {
   //LOGN(" %u Samples/sec\r", sSampleCounter);
-  mDevStatus.SwSR = sSampleCounter*10;
+  mDevStatus.SwSR = sSampleCounter*4;
   sSampleCounter = 0;
 
-  /*int64_t get_result = ztex_default_lsi_get1(mDevHandle, 32);
+  int64_t get_result = ztex_default_lsi_get1(mDevHandle, 2);
   if (get_result < 0)
     return;
-  LOGN("lsi 0x%02x, 0x%08x\n", 0x20, (uint32_t)get_result);
+
+  uint32_t SR = ConvertSampleRate((uint16_t)get_result);
+  if (mDevStatus.LastSR != SR && mDevStatus.LastSR != -1 && mDevStatus.LastSR != 0)
+  {
+    devClient.SampleRateChanged();
+  }
+  mDevStatus.LastSR = SR;
+  mDevStatus.FifoLevel = get_result>>16;
+  //mDevStatus.OutSkipCount = hdr->OutSkipCount;
+  //mDevStatus.InFullCount = hdr->InFullCount;
+  /*LOGN("lsi 0x%02x, 0x%08x\n", 0x20, (uint32_t)get_result);
   uint8_t flags = (uint8_t)get_result;
   for (uint8_t c = 0; c < 7; c++) {
     if (flags & 1)
@@ -692,31 +664,22 @@ void CypressDevice::RxIsochCB()
           if (result.status == 0 && result.length > 0) //a filled block
           {
             uint8_t* ptr = RxReq.buff + (i * rxpktSize);
-            uint16_t len = 0;
-            //-------------------------------------------------
-            if (ProcessHdr(ptr)) {
-              ptr += sizeof(RxHeader);
-              len = (uint16_t)(result.length - sizeof(RxHeader));
-              uint16_t samples = len / InStride;
-              IsoTxSamples += samples;
+            uint16_t len = (uint16_t)result.length;
+            uint16_t samples = len / InStride;
+            IsoTxSamples += samples;
 
-              sSampleCounter += samples;
+            sSampleCounter += samples;
 
-              if ((len + RxProgress) <= INBuffSize) {
-                memcpy(asioInPtr[RxBuff] + RxProgress, ptr, len);
-                RxProgress += len;
-                len = 0;
-              }
-              else {
-                memcpy(asioInPtr[RxBuff] + RxProgress, ptr, INBuffSize - RxProgress);
-                len -= INBuffSize - RxProgress;
-                ptr += INBuffSize - RxProgress;
-                RxProgress = INBuffSize;
-              }
+            if ((len + RxProgress) <= INBuffSize) {
+              memcpy(asioInPtr[RxBuff] + RxProgress, ptr, len);
+              RxProgress += len;
+              len = 0;
             }
-            else
-            {
-              LOG0("ISOCH Rx buff malformed!");
+            else {
+              memcpy(asioInPtr[RxBuff] + RxProgress, ptr, INBuffSize - RxProgress);
+              len -= INBuffSize - RxProgress;
+              ptr += INBuffSize - RxProgress;
+              RxProgress = INBuffSize;
             }
 
             if (RxProgress == INBuffSize) {//Packet complete, dispatch to client

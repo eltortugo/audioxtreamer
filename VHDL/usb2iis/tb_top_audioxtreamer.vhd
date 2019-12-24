@@ -1,23 +1,7 @@
-----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
--- 
--- Create Date: 07/14/2018 12:17:21 AM
--- Design Name: 
--- Module Name: TopLevelSim - Behavioral
--- Project Name: 
--- Target Devices: 
--- Tool Versions: 
--- Description: 
--- 
--- Dependencies: 
--- 
--- Revision:
--- Revision 0.01 - File Created
--- Additional Comments:
--- 
-----------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------
+-- Author:  Hector Soto, TurtleDesign
 
+------------------------------------------------------------------------------------------
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -34,22 +18,22 @@ use ieee.std_logic_unsigned.all;
 
 use work.simtools.all;
 
-entity TopLevelSim is
+entity tb_top_audioxtreamer is
 --  Port ( );
-end TopLevelSim;
+end entity;
 
-architecture Behavioral of TopLevelSim is
+architecture sim of tb_top_audioxtreamer is
 
-constant nr_outputs: natural := 18;
-constant nr_inputs: natural := 24;
+constant nr_outputs     : natural := 18;
+constant nr_inputs      : natural := 24;
 
-constant dut_nr_outputs: natural := 24;
-constant dut_nr_inputs: natural := 24;
+constant dut_nr_outputs : natural := 24;
+constant dut_nr_inputs  : natural := 24;
+constant payload_size   : natural := (3*nr_outputs)+4;
 
-constant payload_size : natural := (3*nr_outputs)+4;
+signal sd_out           : std_logic_vector(dut_nr_outputs/2 -1  downto 0);
+
 type payload is array (0 to  payload_size-1) of std_logic_vector(7 downto 0);
-signal sd_out : std_logic_vector(dut_nr_outputs/2 -1  downto 0);
-
 constant test_data: payload := 
 ( X"AA", X"55",
   X"55", X"AA",
@@ -87,47 +71,37 @@ constant test_data: payload :=
   --,X"DF", X"EF", X"FF" --ch32
 );
 
- 
-signal usb_clk  : std_logic;
-signal reset: std_logic;
 
+signal usb_clk        : std_logic;
+signal reset          : std_logic;
 
-signal usb_dio : std_logic_vector(15 downto 0);
-signal SLOEn  : std_logic;
-signal SLRDn  : std_logic;
-signal wr_counter: integer range 0 to payload_size -1;
-signal out_data : std_logic_vector(15 downto 0);
+signal usb_dio        : std_logic_vector(15 downto 0);
+signal SLOEn          : std_logic;
+signal SLRDn          : std_logic;
+signal wr_counter     : integer range 0 to payload_size -1;
+signal out_data       : std_logic_vector(15 downto 0);
 
-signal SLWRn     : std_logic;
-signal tx_full    : std_logic;
+signal SLWRn          : std_logic;
+signal tx_full        : std_logic;
 
-signal flaga      : std_logic;
-signal flagb      : std_logic;
+signal flaga          : std_logic;
+signal flagb          : std_logic;
 
-signal yamaha_clk: std_logic;
+signal yamaha_clk     : std_logic;
 signal yamaha_word_clk: std_logic;
 
-signal led : std_logic_vector(7 downto 0);
-signal nr_writes : natural;
+signal nr_writes      : natural;
 
-signal sof : std_logic;
-signal pktend : std_logic;
-
+signal lsi8_en        : std_logic;
+signal lsi8_rdnck     : std_logic;
+signal lsi8_dio       : std_logic_vector(7 downto 0);
 begin
 
 clk_gen(usb_clk, 48_000_000.0 );
 clk_gen(yamaha_clk, 11_289_600.0 ); --44.1 khz
 --clk_gen(yamaha_clk, 24_576_000.0 ); --96 khz
 
-signal_gen(sof, usb_clk, '0', 100, '1', 8, '0', (6000-8), true);
-
-process
-begin 
-	reset <= '1';
-	wait for 100 ns;
-	reset <= '0';
-	wait;
-end process;
+signal_gen(reset,usb_clk,'1', 10,'0', 1, '0', 1, false);
 
 process (usb_clk)
 begin
@@ -147,18 +121,11 @@ begin
 end process;
 
 process (usb_clk)
-  variable delay: integer := 10;
+
 begin
   if rising_edge(usb_clk) then
     if reset = '1' then
       flaga <= '1';
-    --elsif wr_counter = ((payload_size/2)-1) then
-    --  flaga <= '0';
-    --  delay := 10;
-    --elsif delay = 0 then
-    --  flaga <= '1';
-    --elsif flaga = '0' then
-    --  delay := delay -1;
     end if;
   end if;
 end process;
@@ -190,23 +157,61 @@ begin
         nr_writes <= nr_writes +1;
       end if;
 
-
-
     end if;
   end if;
 end process;
 
+p_sim : process
+begin
+  lsi8_rdnck  <= '1';   --ready to write
+  lsi8_dio    <= x"00";  --params addr
+  lsi8_en     <= '0';
+  wait until falling_edge(reset);
+  wait for 1 ps;
+  lsi8_dio    <= x"04"; --params addr
+  wait until rising_edge(usb_clk);
+  wait until rising_edge(usb_clk);
+  wait until rising_edge(usb_clk);
+  wait until rising_edge(usb_clk);
+  wait until rising_edge(usb_clk);
+  wait for 1 ps;
+  lsi8_en     <= '1';
+  wait until rising_edge(usb_clk);
+  wait for 1 ps;
+  lsi8_dio    <= x"b8"; -- 24 ins,18 outs
+  wait until rising_edge(usb_clk);
+  wait for 1 ps;
+  lsi8_rdnck  <= '0';
+  wait until rising_edge(usb_clk);
+  wait for 1 ps;
+  lsi8_dio    <= x"00";  -- samples deprecated
+  wait until rising_edge(usb_clk);
+  wait for 1 ps;
+  lsi8_rdnck  <= '1';
+  wait until rising_edge(usb_clk);
+  wait for 1 ps;
+  lsi8_dio    <= x"10"; -- 16 bytes depth
+  wait until rising_edge(usb_clk);
+  wait for 1 ps;
+  lsi8_rdnck  <= '0';
+  wait until rising_edge(usb_clk);
+  wait for 1 ps;
+  lsi8_dio    <= x"00"; -- pad
+  wait until rising_edge(usb_clk);
+  wait for 1 ps;
+  lsi8_en     <= '0';
+  wait;
+  
+end process;
+
+
 flagb <= not tx_full;
 
-inst: entity work.CY16_to_iis
+inst: entity work.top_audioxtreamer
   generic map( sdi_lines => dut_nr_inputs/2, sdo_lines => dut_nr_outputs/2 )--, bit_depth => 24 )
 port map(
 
-    led(7 downto 0) => led(7 downto 0),
-
-
-
-areset => reset,
+    areset => reset,
 
     cy_clk  => usb_clk,
     -- DATA IO
@@ -214,7 +219,7 @@ areset => reset,
 
     FLAGA => flaga, -- repeat the message
     FLAGB => flagb,
-    PKTEND => pktend,
+    --PKTEND => pktend,
     SLRDn  => SLRDn,
     SLOEn  => SLOEn,
     SLWRn   => SLWRn,
@@ -225,16 +230,11 @@ areset => reset,
     ymh_clk => yamaha_clk,
     ymh_word_clk => yamaha_word_clk,
 
-   lsi_clk  => '0',
-   lsi_mosi => '0',
-   lsi_stop => '0',
-   
-   midi_rx => (others => '0'),
+   lsi8_en    => lsi8_en   ,
+   lsi8_rdnck => lsi8_rdnck,
+   lsi8_dio   => lsi8_dio  ,
 
-   gpio_dat => sof
+   midi_rx => (others => '0')
+
     );
-
-
-end Behavioral;
-
-
+end architecture;

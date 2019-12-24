@@ -138,7 +138,6 @@
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;TORTUGASIO_EXPORTS;%(PreprocessorDefinitions);</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
       <PrecompiledHeader>Use</PrecompiledHeader>
-      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -157,7 +156,6 @@
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;_USRDLL;TORTUGASIO_EXPORTS;%(PreprocessorDefinitions);</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
       <PrecompiledHeader>Use</PrecompiledHeader>
-      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
