@@ -482,6 +482,18 @@ void CypressDevice::main()
   HANDLE timerH = CreateWaitableTimer(NULL, FALSE, nullptr);
   LARGE_INTEGER li;
   li.QuadPart = -10 *1000000;
+
+  ZeroMemory(&mXferEp0Status, sizeof(mXferEp0Status));
+  mXferEp0Status.handle = mDevHandle;
+  mXferEp0Status.bmRequestType = 0xc0;
+  mXferEp0Status.bRequest = LSI8_READ;
+  mXferEp0Status.wValue = 0;
+  mXferEp0Status.wIndex = 2;
+  mXferEp0Status.buff = mEp0Status;
+  mXferEp0Status.bufflen = 4;
+  mXferEp0Status.ovlp.hEvent = CreateEvent(NULL, FALSE, FALSE, nullptr);
+
+
   SetWaitableTimer(timerH, &li, 250, NULL, NULL, false);
   
   bool ErrorBreak = false;
@@ -489,15 +501,22 @@ void CypressDevice::main()
   while (WaitForSingleObject(mExitHandle, 0) == WAIT_TIMEOUT)
   {
 
-    HANDLE events[4] = { mTxRequests[mTxReqIdx].ovlp.hEvent, mRxRequests[mRxReqIdx].ovlp.hEvent, timerH, mASIOHandle };
-    DWORD wfmo = WaitForMultipleObjects(mASIOHandle == NULL ? 3 : 4, events, false, 200);
+    HANDLE events[] = {
+      mTxRequests[mTxReqIdx].ovlp.hEvent,
+      mRxRequests[mRxReqIdx].ovlp.hEvent,
+      mASIOHandle,
+      timerH,
+      mXferEp0Status.ovlp.hEvent
+    };
+    DWORD wfmo = WaitForMultipleObjects(5 , events, false, 200);
 
     switch (wfmo)
     {
     case WAIT_OBJECT_0    : TxIsochCB();    break;//tx iso
     case WAIT_OBJECT_0 + 1: RxIsochCB();    break;//rx isoch
-    case WAIT_OBJECT_0 + 2: TimerCB();      break;// 1/5 sec timer
-    case WAIT_OBJECT_0 + 3: AsioClientCB(); break;//ASIO ready
+    case WAIT_OBJECT_0 + 2: AsioClientCB(); break;//ASIO ready
+    case WAIT_OBJECT_0 + 3: TimerCB();      break;// 1/4 sec timer
+    case WAIT_OBJECT_0 + 4: Ep0StatusCB();  break;
 
     default: //not good
       if (wfmo == 0xffffffff)
@@ -517,6 +536,8 @@ void CypressDevice::main()
 
   CancelWaitableTimer(timerH);
   CloseHandle(timerH);
+
+  CloseHandle(mXferEp0Status.ovlp.hEvent);
 
   devClient.FreeBuffers(mINBuff, mOUTBuff);
 
@@ -628,17 +649,9 @@ void CypressDevice::TimerCB()
   mDevStatus.SwSR = sSampleCounter*4;
   sSampleCounter = 0;
 
-  int64_t get_result = ztex_default_lsi_get1(mDevHandle, 2);
-  if (get_result < 0)
-    return;
+  control_xfer(mXferEp0Status);
 
-  uint32_t SR = ConvertSampleRate((uint16_t)get_result);
-  if (mDevStatus.LastSR != SR && mDevStatus.LastSR != -1 && mDevStatus.LastSR != 0)
-  {
-    devClient.SampleRateChanged();
-  }
-  mDevStatus.LastSR = SR;
-  mDevStatus.FifoLevel = get_result>>16;
+
   //mDevStatus.OutSkipCount = hdr->OutSkipCount;
   //mDevStatus.InFullCount = hdr->InFullCount;
   /*LOGN("lsi 0x%02x, 0x%08x\n", 0x20, (uint32_t)get_result);
@@ -651,6 +664,23 @@ void CypressDevice::TimerCB()
     }
     flags >>= 1;
   } */
+}
+
+void CypressDevice::Ep0StatusCB()
+{
+  struct _t
+  {
+    uint16_t sr;
+    uint16_t fifo;
+  } & s = *(struct _t*)mEp0Status;
+
+  uint32_t SR = ConvertSampleRate( s.sr );
+  if (mDevStatus.LastSR != SR && mDevStatus.LastSR != -1 && mDevStatus.LastSR != 0)
+  {
+    devClient.SampleRateChanged();
+  }
+  mDevStatus.LastSR = SR;
+  mDevStatus.FifoLevel = s.fifo;
 }
 
 //---------------------------------------------------------------------------------------------

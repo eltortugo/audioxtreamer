@@ -326,6 +326,30 @@ int64_t winusb_control_transfer(HANDLE handle, uint8_t bmRequestType, uint8_t bR
     return uint64_t(cbSent);
 }
 
+BOOL winusb_control_xfer(XferReq & xf)
+{
+  if (xf.bufflen > 4096)
+    return 0;
+
+  WINUSB_SETUP_PACKET  SetupPacket;
+  ZeroMemory(&SetupPacket, sizeof(WINUSB_SETUP_PACKET));
+  SetupPacket.RequestType = xf.bmRequestType;
+  SetupPacket.Request = xf.bRequest;
+  SetupPacket.Value = xf.wValue;
+  SetupPacket.Index = xf.wIndex;
+  SetupPacket.Length = (uint16_t)xf.bufflen;
+
+  if (WinUsb_ControlTransfer(xf.handle, SetupPacket, xf.buff, (ULONG)xf.bufflen, &xf.xfered, &xf.ovlp))
+    return FALSE;
+  else {
+    DWORD err = GetLastError();
+    if (ERROR_IO_PENDING == err)
+      return TRUE;
+    else
+      return FALSE;
+  }
+}
+
 struct winusb_iso_info
 {
   WINUSB_ISOCH_BUFFER_HANDLE isoBuffHandle;
@@ -429,6 +453,7 @@ bool winusb_abort_pipe(HANDLE handle, uint8_t ep )
 const USB_BKND_OPEN_CLOSE bknd_open = winusb_open;
 const USB_BKND_OPEN_CLOSE bknd_close = winusb_close;
 const USB_BACKEND_CTRL_XFER control_transfer        = winusb_control_transfer;
+const USB_BACKEND_CTRL_XFER_ASYNCH control_xfer = winusb_control_xfer;
 const USB_BACKEND_INIT_ISO_PRIV bknd_init_read_xfer = winusb_init_xfer;
 const USB_BACKEND_INIT_ISO_PRIV bknd_init_write_xfer = winusb_init_xfer;
 const USB_BACKEND_XFER bknd_iso_read            = winusb_iso_read;
