@@ -39,8 +39,6 @@ private:
 
   uint16_t nrSamples;
 
-  bool ProcessHdr(uint8_t* pHdr);
-  void InitTxHeaders(uint8_t* ptr, uint32_t Samples);
   void UpdateClient();
 
   uint32_t RxProgress;

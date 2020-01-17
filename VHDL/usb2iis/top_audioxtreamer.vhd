@@ -81,12 +81,6 @@ signal usb_reset : std_logic;
 signal io_reset : std_logic;
 --signal clkgen_locked : std_logic;
 
-signal rx_data : std_logic_vector(15 downto 0);
-
-signal usb_rx_empty : std_logic;
-signal usb_rdn : std_logic;
-signal usb_oe : std_logic;
-
 subtype out_data_array is slv24_array(0 to max_nr_outputs-1);
 
 signal out_fifo_full : std_logic_vector((max_nr_outputs/3)-1 downto 0);
@@ -95,6 +89,7 @@ signal out_prog_full : std_logic_vector((max_nr_outputs/3)-1 downto 0);
 signal rcvr_wr: std_logic;
 signal rcvr_data : out_data_array;
 signal rcvr_fifo_full : std_logic;
+signal rcvr_fifo_full_sync :std_logic;
 
 signal tx_reset : std_logic;
 
@@ -103,6 +98,11 @@ signal sd_out : std_logic_vector(sdo_lines-1 downto 0);
 
 type rd_data_count_t is array (natural range <> ) of std_logic_vector(7 downto 0);
 signal rd_data_count : rd_data_count_t( 0 to max_nr_outputs-1);
+
+signal out_axis_tvalid : std_logic;
+signal out_axis_tready : std_logic;
+signal out_axis_tdata  : std_logic_vector(15 downto 0);
+
 
 signal out_fifo_rd_data : out_data_array;
 signal out_fifo_rd_en : std_logic;
@@ -153,20 +153,14 @@ signal midi_out_ready : std_logic;
 signal midi_out_busy  : std_logic;
 signal midi_out_sink  : std_logic_vector(1 downto 0);
 
+signal spmf   : slv_32;
+signal spmf_t : std_logic;
+
 
 constant cookie_str :string := "TRTG";
 constant cookie : slv_32 := to_std_logic_vector(cookie_str);
 
-attribute mark_debug : string;
-attribute keep : string;
 
-attribute mark_debug of usb_oe  : signal is "true";
-attribute mark_debug of usb_rdn : signal is "true";
-attribute mark_debug of FLAGA   : signal is "true";
-attribute mark_debug of FLAGB   : signal is "true";
-attribute mark_debug of out_fifo_skip  : signal is "true";
-
-------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------
 begin
 txb_oe <= '1';
@@ -202,6 +196,8 @@ with lsi_rd_addr select lsi_rd_data <=
   x"00" & rd_data_count(0) & reg_sr_count when X"02",           -- sampling rate counter to detect the word clock and the out fifo level
   in_fifo_full_count & out_fifo_skip_count when X"03",  -- fifo empty /full counters
 
+  spmf when X"08",
+
   X"000000"& '0' & midi_in_valid_r when X"10" | X"20",
   midi_in_data(1) when X"11" | X"21",
   midi_in_data(2) when X"12" | X"22",
@@ -221,6 +217,20 @@ sr_detect : entity work.sampling_rate_detect
     rst => usb_reset,
     pcm_clk => f256_clk,
     sr_count => reg_sr_count
+  );
+
+-----------------------------------------------------------------------------------------------------------
+
+--spmf_t <= '1' when lsi_rd_addr = X"08" and lsi_rd = '1' else '0';
+
+sample_counter_inst: entity work.sample_counter
+  generic map ( trig_freq => 32)
+  port map (
+    clk   => usb_clk,
+    rst   => usb_reset,
+    f256  => f256_clk,
+    trig  => spmf_t,
+    spmf  => spmf
   );
 
 -----------------------------------------------------------------------------------------------------------
@@ -333,22 +343,57 @@ generic map(
 port map (
   usb_clk  => usb_clk,
   reset  => io_reset,
-  usb_oe   => usb_oe,
-  usb_data => rx_data,
-  usb_empty => usb_rx_empty,
-  usb_rd_req  => usb_rdn,
 
-  nr_outputs  => reg_ch_params(3 downto 0),
+  s_axis_tdata  => out_axis_tdata,
+  s_axis_tvalid => out_axis_tvalid,
+  s_axis_tready => out_axis_tready,
+
+  nr_outputs    => reg_ch_params(7 downto 0),
   out_fifo_full => rcvr_fifo_full,
   out_fifo_wr   => rcvr_wr,
   out_fifo_data => rcvr_data
+
+  ,uf_pulse      => spmf_t
 );
 ------------------------------------------------------------------------------------------------------------
-io_reset <= '1' when  usb_reset = '1' or (lsi_wr = '1' and lsi_wr_addr = X"04") else '0';
+io_reset <= '1' when  usb_reset = '1' or reg_ch_params = 0 or (lsi_wr = '1' and lsi_wr_addr = X"04") else '0';
 ------------------------------------------------------------------------------------------------------------
 
-out_empty <= out_fifo_empty(0);
-out_fifo_rd <= out_fifo_rd_en;
+
+
+------------------------------------------------------------------------------------------------------------
+-- fill buffer: when the fifo is empty, wait until it is fully filled before starting to read
+-- reducing the depth will increase drops by a bursty data flow so if the sender can keep the variation
+-- the data flow smooth (5 & 6 samples per microframe "spp" @44k1) the out fifo can go as low as 8 samples
+
+p_fill_out : process (f256_clk,out_fifo_rd_en)
+  variable fill : std_logic := '1';
+  variable full_sync : std_logic_vector(2 downto 0) := "000";
+begin
+
+  if rising_edge(f256_clk) then
+    if sd_reset = '1' then
+      fill := '1';
+      rcvr_fifo_full_sync <= '0';
+    else
+      full_sync := full_sync(1 downto 0) & rcvr_fifo_full;
+      rcvr_fifo_full_sync <= full_sync(2);
+      if fill = '1' and  rcvr_fifo_full_sync = '0' and full_sync(2) = '1' then --edge
+        fill := '0';
+      elsif fill = '0' and out_fifo_empty(0) = '1' then
+        fill := '1';
+      end if;
+    end if;
+  end if;
+
+  out_empty <= fill;
+
+  if fill = '0' then
+    out_fifo_rd <= out_fifo_rd_en;
+  else
+    out_fifo_rd <= '0';
+  end if;
+end process;
 ------------------------------------------------------------------------------------------------------------
 
 g_out_fifos : for i in 0 to (max_nr_outputs/3) -1 generate
@@ -471,7 +516,7 @@ generic map (
   clk  => usb_clk,
   reset=> tx_reset,
 
-  nr_inputs       => reg_ch_params(7 downto 4),
+  nr_inputs       => reg_ch_params(15 downto 8),
   sof_int         => '0',
 
   in_fifo_empty   => in_fifo_empty,
@@ -505,11 +550,10 @@ i_s_axis_to_w_fifo: entity work.s_axis_to_w_fifo
     SLOEn => SLOEn,
 
 --s_axis m_axis
-    m_axis_tready => '0',
-    rx_data  => rx_data,
-    rx_empty => usb_rx_empty,
-    rx_rdn => usb_rdn,
-    rx_oe  => usb_oe,
+
+    m_axis_tdata  => out_axis_tdata,
+    m_axis_tvalid => out_axis_tvalid,
+    m_axis_tready => out_axis_tready,
 
     s_axis_tvalid => in_axis_tvalid,
     s_axis_tlast  => in_axis_tlast,

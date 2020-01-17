@@ -43,10 +43,6 @@ entity s_axis_to_w_fifo is
     m_axis_tready: in std_logic;
     m_axis_tvalid: out std_logic;
 
-    rx_data : out STD_LOGIC_VECTOR(DATA_WIDTH-1 downto 0);
-    rx_empty : out std_logic;
-    rx_rdn   : in std_logic;
-    rx_oe    : out std_logic;
 --AXIS slave in eindpoint
     s_axis_tvalid: in std_logic;
     s_axis_tlast : in std_logic;
@@ -58,20 +54,24 @@ end s_axis_to_w_fifo;
 ------------------------------------------------------------------------------------------------------------
 architecture rtl of s_axis_to_w_fifo is
 
-  signal full_reg: std_logic;
-  signal fifo_wr: std_logic;
-  signal full_sig: std_logic;
-  signal pending_wr: std_logic;
-  signal data_reg : std_logic_vector(DATA_WIDTH-1 downto 0);
-  signal tx_data : std_logic_vector(DATA_WIDTH-1 downto 0);
-  signal tlast_reg : std_logic;
-  signal tready: std_logic;
-  signal tx_req : std_logic;
-  signal tx_grant: std_logic;
-  signal usb_oe: std_logic;
-  signal usb_oe_3s: std_logic;
-  signal tx_full : std_logic;
-
+  signal full_reg   : std_logic;
+  signal fifo_wr    : std_logic;
+  signal full_sig   : std_logic;
+  signal pending_wr : std_logic;
+  signal data_reg   : std_logic_vector(DATA_WIDTH-1 downto 0);
+  signal tx_data    : std_logic_vector(DATA_WIDTH-1 downto 0);
+  signal tlast_reg  : std_logic;
+  signal tready     : std_logic;
+  signal tx_req     : std_logic;
+  signal tx_grant   : std_logic;
+  signal usb_oe     : std_logic;
+  signal usb_oe_3s  : std_logic;
+  signal tx_full    : std_logic;
+  signal rx_data    : std_logic_vector(DATA_WIDTH-1 downto 0);
+  signal rx_data_r  : std_logic_vector(DATA_WIDTH-1 downto 0);
+  signal rdn        : std_logic;
+  signal rd_pend      : std_logic;
+  signal tvalid     : std_logic;
   ------------------------------------------------------------------------------------------------------------
 begin
 
@@ -90,6 +90,64 @@ begin
   --rx_data <= dio;
 
   ------------------------------------------------------------------------------------------------------------
+
+  p_tdata : process(clk)
+  begin
+    if rising_edge(clk) then
+
+      if FLAGA = '1' and usb_oe = '1' and rdn = '0' then
+        rx_data_r <= rx_data;
+      end if;
+
+      if reset = '1' then
+        rd_pend <= '0';
+      elsif FLAGA = '1' and usb_oe = '1' then
+        if m_axis_tready = '0' and rdn = '0' then
+          rd_pend <= '1';
+        elsif m_axis_tready = '1' and tvalid = '1' then
+          rd_pend <= '0';
+        end if;
+      end if;
+
+      if m_axis_tready = '1' and FLAGA = '1' and usb_oe = '1' then
+        if rdn = '0' then
+          m_axis_tdata <= rx_data;
+        else
+          m_axis_tdata <= rx_data_r;
+        end if;
+      end if;
+    end if;
+  end process;
+  ------------------------------------------------------------------------------------------------------------
+  p_tvalid : process(clk)
+  begin
+    if rising_edge(clk) then
+      if reset = '1' then
+        tvalid <= '0';
+      elsif tvalid = '0' or m_axis_tready = '1' then
+         tvalid <= FLAGA and usb_oe and (not rdn or rd_pend);
+      end if;
+    end if;
+  end process;
+
+  m_axis_tvalid <= tvalid;
+  ------------------------------------------------------------------------------------------------------------
+  
+  p_rdn : process(clk)
+  begin
+    if rising_edge(clk) then
+      if reset = '1' then 
+        rdn <= '1';
+      elsif flaga = '1' and usb_oe = '1' and m_axis_tready = '1' then
+        rdn <= '0';
+      else
+        rdn <= '1';
+      end if;
+    end if;
+  end process;
+
+  slrdn <= rdn;
+  ------------------------------------------------------------------------------------------------------------
   bus_arbiter : process(clk)
   begin
     if rising_edge(clk) then
@@ -98,7 +156,7 @@ begin
         usb_oe_3s <= '1'; --always receiving unless
         SLOEn <= '0';
         tx_grant <= '0';
-      elsif usb_oe = '1' and tx_req = '1' and (rx_rdn = '1' or FLAGA = '0')  then
+      elsif (FLAGA = '0' or rdn = '1') and usb_oe = '1' and tx_req = '1' then
         usb_oe <= '0';
         usb_oe_3s <= '0';
         SLOEn <= '1'; 
@@ -109,17 +167,12 @@ begin
   end process;
   ------------------------------------------------------------------------------------------------------------
 
-  SLRDn <= rx_rdn or not usb_oe or not FLAGA;
   SLWRn <= not fifo_wr or not FLAGB;--never allow a write when full
 
-  --parameter OUTEP = 2,            // EP for FPGA -> EZ-USB transfers
-  --parameter INEP = 6,             // EP for EZ-USB -> FPGA transfers 
-  --assign FIFOADDR = ( if_out ? (OUTEP/2-1) : (INEP/2-1) ) & 2'b11;
-  FIFOADDR0 <= '0';
+  --EP2 IN, EP8 OUT
+  FIFOADDR0 <= usb_oe;
   FIFOADDR1 <= usb_oe;
 
-  rx_oe    <= usb_oe;
-  rx_empty <= not FLAGA;
   tx_full  <= not FLAGB;
 
   full_sig <= tx_grant and not tx_full;

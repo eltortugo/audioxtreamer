@@ -27,47 +27,37 @@ generic(
     --usb interface
     usb_clk : in STD_LOGIC;
     reset : in STD_LOGIC;
-    -- DATA IO
 
-    usb_data : in slv_16;
-    -- FIFO control
-    usb_oe  : in std_logic; --signals a read grant
-    usb_empty : in  STD_LOGIC;
-    usb_rd_req : out STD_LOGIC; --signals a read request
+    s_axis_tdata : in slv_16;
+    s_axis_tvalid  : in std_logic;
+    s_axis_tready : out STD_LOGIC;
 
-    nr_outputs : in std_logic_vector(3 downto 0);
+    nr_outputs : in std_logic_vector(7 downto 0);
 
     out_fifo_full : in std_logic;
     out_fifo_wr   : out std_logic;
-    out_fifo_data : out slv24_array(0 to (max_sdo_lines*2)-1)
+    out_fifo_data : out slv24_array(0 to (max_sdo_lines*2)-1);
+
+    uf_pulse      : out std_logic
 
     );
 end entity;
-------------------------------------------------------------------------------------------------------------
+
 ------------------------------------------------------------------------------------------------------------
 
 architecture rtl of isoch_audio_out is
 
-signal rd_data : std_logic_vector(15 downto 0);
-
-signal rd_req :std_logic;
-signal stall_rd :std_logic;
-
-signal rvalid   : std_logic;
-signal reg_oe  : std_logic;
-
 -- RX FSM
-type rx_state_t is ( cmd, w0, w1, w2);
+type rx_state_t is (init, w0, w1, w2,flush);
 signal rx_state : rx_state_t;
 --attribute fsm_encoding : string;
 --attribute fsm_encoding of rx_state : signal is "one-hot";
 
--- packet decoding
-
-signal cmd_reg : slv_16;
-signal audio_valid: std_logic;
-
-signal outs_counter, active_outs: natural range 0 to max_sdo_lines;
+signal t_valid_r  : std_logic;
+signal uframe_end : std_logic;
+signal outs_counter, active_outs: natural range 0 to max_sdo_lines-1;
+signal eof        : std_logic;
+signal eof_r      : slv_16;
 
 -- out_fifo signals
 
@@ -77,142 +67,132 @@ signal out_fifo_data_regs : slv24_array(0 to (max_sdo_lines*2)-1);
 ------------------------------------------------------------------------------------------------------------
 begin
 
-------------------------------------------------------------------------------------------------------------
-register_inputs : process (usb_clk)
-begin
-  if rising_edge(usb_clk) then
-    if reset = '1' then
-      rd_data <= X"CDCD";
-    else
-      rd_data <= usb_data;
+  p_uframe_end: process (usb_clk)
+     --at 48mhz, times-out after 120 usec from the 125us/uframe, so we dont expect any other additional transaction
+    constant timer_start : natural := 5760;
+    variable counter : natural range 0 to timer_start := timer_start;
+
+  begin
+    if rising_edge(usb_clk) then
+      if reset = '1' then
+        uframe_end <= '0';
+        counter := timer_start;
+        t_valid_r <= '0';
+      else
+        t_valid_r <= s_axis_tvalid;
+        uframe_end <= '0';
+        if counter = 0 then
+          uframe_end <= '1';
+          counter := timer_start;
+        elsif counter < timer_start or (t_valid_r = '0' and s_axis_tvalid = '1') then --edge
+          counter := counter -1;
+        end if;
+      end if;
     end if;
-  end if;
-end process;
-------------------------------------------------------------------------------------------------------------
-rvalid_reg : process (usb_clk)
-begin
-  if rising_edge(usb_clk) then
-    if reset = '1' then
-      rvalid <= '0';
-    elsif usb_empty = '0' and rd_req = '0' and usb_oe = '1' then 
-      rvalid <= '1';
-    else
-      rvalid <= '0';
-    end if;
-  end if;
-end process;
-------------------------------------------------------------------------------------------------------------
-read_reg : process (usb_clk)
-begin
-  if rising_edge(usb_clk) then
-    reg_oe <= usb_oe;
-    if reset = '1'
-     or (outs_counter = active_outs-1 and out_fifo_full = '1') then
-      stall_rd <= '1';
-    elsif rd_req = '1' and out_fifo_full = '0' and usb_oe = '1' and reg_oe = '0' then
-      stall_rd <= '0';
-    end if;
-  end if;
-end process;
-------------------------------------------------------------------------------------------------------------
-rd_req <= '1' when (outs_counter = active_outs-1 and rx_state = w2 and stall_rd = '1') else '0';
-usb_rd_req <= rd_req;
+  end process;
+  
+  uf_pulse <= uframe_end;
+
 ------------------------------------------------------------------------------------------------------------
 rcvr_FSM: process (usb_clk)
 begin
   if rising_edge(usb_clk) then
-    if reset = '1' then
-      rx_state <= cmd;
-    else  
+    if reset = '1' or uframe_end = '1' then
+      eof <= '0';
+      eof_r <= x"0000";
+    elsif s_axis_tvalid = '1' and eof = '0' then
+      eof_r <= s_axis_tdata;
+      if eof_r = x"55aa" and s_axis_tdata = x"aa55" then
+        eof <= '1';
+      end if;
+    end if;
+
+    if reset = '1' or eof = '1' then
+      rx_state <= init;
+    else
       case rx_state is
-      when cmd =>
-        if rvalid = '1' and active_outs /= 0 then
-          if audio_valid = '1' then
-            rx_state <= w0;
-          end if;
+      when init =>
+        if active_outs /= 0 then
+          rx_state <= w0;
         end if;
       when w0 =>
-        if rvalid = '1' then
+        if s_axis_tvalid = '1' then
           rx_state <= w1;
         end if;
       when w1 =>
-        if rvalid = '1' then
+        if s_axis_tvalid = '1' then
           rx_state <= w2;
         end if;
       when w2 =>
-        if outs_counter < active_outs-1  then
-          if rvalid = '1' then
-            rx_state <= w0;
-          end if;
-        else
-          if out_fifo_full = '0' and (rvalid = '1' or (stall_rd = '1' and usb_oe = '1' and reg_oe = '0')) then --only if we manage to write, otherwise wait here
-            rx_state <= cmd;
-          end if;
+        --only if we manage to write, otherwise wait here
+        if s_axis_tvalid = '1' and ( outs_counter < active_outs-1 or out_fifo_full = '0') then
+          rx_state <= w0;
         end if;
-      end case;
+      when flush => null;
 
+      end case;
     end if;
   end if; 
 end process;
 
 ------------------------------------------------------------------------------------------------------------
-audio_valid <= '1' when rx_state = cmd and cmd_reg = X"55AA" and rd_data = X"AA55" else '0';
+active_outs <= to_integer(unsigned(nr_outputs))/2;
 ------------------------------------------------------------------------------------------------------------
 
-------------------------------------------------------------------------------------------------------------
-process (usb_clk)
-begin
-  if rising_edge(usb_clk) then
-    if reset = '1' then
-      cmd_reg <= X"0000";
-    elsif rx_state = cmd then
-      if rvalid = '1' then
-        if audio_valid = '0' then
-          cmd_reg <= rd_data;
-        else
-          cmd_reg <= X"0000" ; -- invalidate the header
-        end if;
-      end if;
-    end if; 
-  end if;
-end process;
+s_axis_tready <= '0' when (rx_state = init and eof = '0') or (rx_state = w2 and outs_counter = active_outs-1 and out_fifo_full = '1') else '1';
 
 ------------------------------------------------------------------------------------------------------------
-active_outs <= to_integer(unsigned(nr_outputs)) + 1 ;
-------------------------------------------------------------------------------------------------------------
+
 process (usb_clk)
 begin
   if rising_edge (usb_clk) then
-    if reset = '1' or audio_valid = '1' then
+    if reset = '1' or uframe_end = '1' then
       outs_counter <= 0;
-    elsif rx_state = w2 and rvalid = '1' and outs_counter < active_outs-1 then
-      outs_counter <= outs_counter+1;
+    elsif rx_state = w2 and s_axis_tvalid = '1' then
+      if outs_counter < active_outs-1 then
+        outs_counter <= outs_counter+1;
+      elsif out_fifo_full = '0' then
+        outs_counter <= 0;
+      end if;
     end if;
   end if;
 end process;
 
 ------------------------------------------------------------------------------------------------------------
-out_fifo_wr <= '1' when 
-  rx_state = w2 and
-  (rvalid = '1' or (stall_rd = '1' and usb_oe = '1' and reg_oe = '0'))and
-  outs_counter = active_outs-1 and
-  out_fifo_full = '0'
-  else '0';
+
+process (usb_clk)
+begin
+  if rising_edge (usb_clk) then
+    if reset = '1' or eof = '1' then
+      out_fifo_wr <= '0';
+    elsif rx_state = w2 and s_axis_tvalid = '1' and outs_counter = active_outs-1 and out_fifo_full = '0' then
+      out_fifo_wr <= '1';
+    else
+      out_fifo_wr <= '0';
+    end if;
+  end if;
+end process;
+--out_fifo_wr <= '1' when 
+--  rx_state = w2 and
+--  s_axis_tvalid = '1' and
+--  outs_counter = active_outs-1 and
+--  out_fifo_full = '0'
+--  else '0';
 ------------------------------------------------------------------------------------------------------------
 rx_fifos : for i in 0 to max_sdo_lines-1 generate
 
   process (usb_clk)
   begin
     if rising_edge(usb_clk) then
-      if reset = '1' then
+      if reset = '1' or eof = '1'then
         out_fifo_data_regs(i*2)     <= (others => '0');
         out_fifo_data_regs((i*2)+1) <= (others => '0');
-      elsif i = outs_counter and rvalid = '1' then
+      elsif i = outs_counter and s_axis_tvalid = '1' then
         case rx_state is
-        when w0 => out_fifo_data_regs(i*2)(15 downto 0) <= rd_data;
-        when w1 => out_fifo_data_regs(i*2)(23 downto 16) <= rd_data(7 downto 0);
-                        out_fifo_data_regs((i*2)+1)(7 downto 0) <= rd_data(15 downto 8);
-        when w2 => out_fifo_data_regs((i*2)+1)(23 downto 8) <= rd_data;
+        when w0 => out_fifo_data_regs(i*2)(15 downto 0) <= s_axis_tdata;
+        when w1 => out_fifo_data_regs(i*2)(23 downto 16) <= s_axis_tdata(7 downto 0);
+                        out_fifo_data_regs((i*2)+1)(7 downto 0) <= s_axis_tdata(15 downto 8);
+        when w2 => out_fifo_data_regs((i*2)+1)(23 downto 8) <= s_axis_tdata;
         when others =>
         end case;
       end if;

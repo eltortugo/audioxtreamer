@@ -185,8 +185,8 @@ bool CypressDevice::Open()
     goto err;
   }
 
-  mDefInEP = info.default_in_ep;
-  mDefOutEP = info.default_out_ep;
+  mDefInEP = 0x82;//info.default_in_ep;
+  mDefOutEP = 0x8;//info.default_out_ep;
 
   /*status = ztex_get_fpga_config(handle);
   if (status == -1)
@@ -319,38 +319,10 @@ static const uint16_t Sine48[48] =
 4390, 2494, 1117, 280, 0, 280, 1117, 2494,
 4390, 6771, 9597, 12820, 16384, 20228, 24287, 28490 };
 
-static const uint32_t scTxHeaderSize = 4;
-
-//initialize header mark
-void CypressDevice::InitTxHeaders(uint8_t* ptr, uint32_t Samples)
-{
-  USHORT w = 0;
-  ZeroMemory(ptr, Samples * OUTStride);
-  uint8_t* p = ptr;
-  for (uint32_t i = 0; i < Samples; i++, p += OUTStride)
-  {
-    *(uint32_t*)p = 0xAA5555AA;
-#if LOOPBACK_TEST
-    /*for (uint32_t c = 0; c < (nrOuts/2)*3; ++c)
-    {
-      *(PUSHORT)(ptr + i * OUTStride + TxHeaderSize + c * 2) = w >>8 | w <<8;
-      w++;
-    }*/
-    for (uint16_t c = 0; c < nrOuts; ++c)
-    {
-      *(p + scTxHeaderSize + c * 3) = 0;
-      *(p + scTxHeaderSize + c * 3 + 1) = uint8_t(Sine48[i % 48] & 0xff);
-      *(p + scTxHeaderSize + c * 3 + 2) = uint8_t(Sine48[i % 48] >> 8);
-    }
-#endif
-  }
-}
-
 //---------------------------------------------------------------------------------------------
 static const uint16_t rxpktSize = 1024;
 static const uint16_t rxpktCount = 16;
 static const uint16_t IsoSize = rxpktCount * rxpktSize;
-static const uint16_t precharge = 44;
 
 //must be a power of two
 static const uint8_t NrXfers = 2;
@@ -383,7 +355,7 @@ void CypressDevice::main()
   InStride = nrIns * 3;
   INBuffSize = (InStride * nrSamples);
 
-  OUTStride = scTxHeaderSize + (nrOuts * 3);
+  OUTStride = (nrOuts * 3);
   OUTBuffSize = OUTStride * nrSamples;
 
   ZeroMemory(&mDevStatus, sizeof(mDevStatus));
@@ -391,15 +363,14 @@ void CypressDevice::main()
   // configure the fpga channel params
   union {
     struct { uint32_t
-      outs : 4,
-       ins : 4,
-   samples : 8,
+      outs : 8,
+       ins : 8,
       fifo : 8,
    padding : 8;
     };
     uint32_t u32;
   } ch_params = {
-    (uint32_t)devParams[NrOuts].val , (uint32_t)devParams[NrIns].val, nrSamples, fifoDepth, 0
+    nrOuts, nrIns, fifoDepth, 0
   };
 
   uint8_t* mINBuff = nullptr, * mOUTBuff = nullptr;
@@ -413,7 +384,6 @@ void CypressDevice::main()
   {
     inPtr[c] = mINBuff + (c* INBuffSize);
     outPtr[c] = mOUTBuff + (c * OUTBuffSize);
-    InitTxHeaders(outPtr[c], nrSamples);
   }
 
   XferReq RxRequests[NrXfers];
@@ -437,7 +407,6 @@ void CypressDevice::main()
     if (bknd_init_write_xfer(mDevHandle, &mTxRequests[c], rxpktCount, rxpktSize)) {
       mTxRequests[c].ovlp.hEvent = CreateEvent(NULL, FALSE, FALSE, nullptr);
       ZeroMemory(mTxRequests[c].buff, IsoSize);
-      InitTxHeaders(mTxRequests[c].buff, precharge);
       bknd_iso_write(&mTxRequests[c]);
     }
 
@@ -568,25 +537,65 @@ void CypressDevice::main()
 
 void CypressDevice::UpdateClient()
 {
-  devClient.Switch(0, InStride, asioInPtr[AsioBuff], OUTStride, asioOutPtr[AsioBuff] + scTxHeaderSize);
+  devClient.Switch(0, InStride, asioInPtr[AsioBuff], OUTStride, asioOutPtr[AsioBuff]);
 }
 
 //---------------------------------------------------------------------------------------------
 static uint32_t sSampleCounter = 0;
+
+static uint8_t spp[rxpktCount] = { 0 };
+static uint8_t spNr = 0;
+
+//traverses the spp array copying samples from the asio buff to the microframes based on the received distribution
+uint8_t DistributeSamples( uint8_t* uf_ptrs[rxpktCount] , uint8_t*src, uint8_t NrSamples, uint16_t OUTStride)
+{
+  uint8_t progress = NrSamples;
+  while( spNr < rxpktCount && NrSamples > 0 )
+  {
+    if (spp[spNr])
+    {
+      uint8_t samples = min(NrSamples, spp[spNr]);
+      uint16_t bytes = samples * OUTStride;
+      memcpy(uf_ptrs[spNr], src, bytes);
+      src += bytes;
+      NrSamples -= samples;
+      spp[spNr] -= samples;
+
+      uf_ptrs[spNr] += bytes;
+      if (spp[spNr] == 0)
+      {
+        //on winusb we cannot control the length of the uframes (crAPI), so a normal 5/6/5/6/5/6 payload will have a whole trailing space.
+        //Put an end mark so the fpga stops, the uframe timer will rearm.
+        *((uint32_t*)(uf_ptrs[spNr])) = 0xaa5555aa;
+        spNr++;
+      }
+    }
+    else
+      spNr++;
+  }
+  return progress - NrSamples;
+}
+
 void CypressDevice::TxIsochCB()
 {
         XferReq& TxReq = mTxRequests[mTxReqIdx];
-        uint16_t txIsoSize = IsoSize;
         uint8_t* ptr = TxReq.buff;
+        ZeroMemory(ptr, IsoSize);
 
-        uint16_t TxSamples = min(IsoTxSamples, txIsoSize / OUTStride);
+        uint16_t TxSamples = min(IsoTxSamples, IsoSize / OUTStride);
+        // distribute the samples on the microframes based on the last received isoch xfer, implicit feedback
+
+        spNr = 0;
+        uint8_t* spp_ptr[rxpktCount] = { 0 };
+        for (uint8_t c = 0; c < rxpktCount; ++c)
+          spp_ptr[c] = ptr + (rxpktSize * c);// +(spp[c] * OUTStride);
 
         //partial TxBuff
         if (TxSamples > 0 && TxBuffPos > 0 && TxBuff != AsioBuff)
         {
           uint32_t count = min(nrSamples - TxBuffPos, TxSamples);
-          memcpy(ptr, asioOutPtr[TxBuff] + (TxBuffPos * OUTStride), count * OUTStride);
-          TxBuffPos += count;
+
+          TxBuffPos += DistributeSamples(spp_ptr, asioOutPtr[TxBuff] + (TxBuffPos * OUTStride), count, OUTStride);
 
           ASSERT(TxBuffPos <= nrSamples);
 
@@ -595,30 +604,26 @@ void CypressDevice::TxIsochCB()
             TxBuffPos = 0;
             NextASIO(TxBuff);
           }
-
-          ptr += count * OUTStride;
-          IsoTxSamples -= count;
           TxSamples -= count;
+          IsoTxSamples -= count;
         }
 
         //whole TxBuff
 
         while (TxSamples >= nrSamples && TxBuff != AsioBuff)
         {
-          memcpy(ptr, asioOutPtr[TxBuff], OUTBuffSize);
-          NextASIO(TxBuff);
+          DistributeSamples(spp_ptr, asioOutPtr[TxBuff], nrSamples, OUTStride);
 
-          ptr += OUTBuffSize;
-          IsoTxSamples -= nrSamples;
+          NextASIO(TxBuff);
           TxSamples -= nrSamples;
+          IsoTxSamples -= nrSamples;
         }
+
         //Partial TxBuff
-        if (TxSamples > 0 && TxBuff != AsioBuff)
+        if (TxSamples && TxBuff != AsioBuff)
         {
           uint32_t count = min(nrSamples - TxBuffPos, TxSamples);
-          memcpy(ptr, asioOutPtr[TxBuff] + (TxBuffPos * OUTStride), count * OUTStride);
-          ptr += count * OUTStride;
-          TxBuffPos += count;
+          TxBuffPos += DistributeSamples(spp_ptr, asioOutPtr[TxBuff] + (TxBuffPos * OUTStride), count, OUTStride);
           TxSamples -= count;
           IsoTxSamples -= count;
         }
@@ -626,16 +631,21 @@ void CypressDevice::TxIsochCB()
         // silence samples
         if (TxSamples && (!ClientActive || TxBuff == AsioBuff))
         {
-          InitTxHeaders(ptr, TxSamples);
-          ptr += TxSamples * OUTStride;
-          IsoTxSamples -= TxSamples;
-          //LOGN("SILENCE!!!! %u\r", TxSamples);
+          for (; spNr < rxpktCount; spNr++) {
+            uint16_t bytes = spp[spNr] * OUTStride;
+            ZeroMemory(spp_ptr[spNr], bytes);
+            IsoTxSamples -= spp[spNr];
+            //mark the end of frame
+            *((uint32_t*)(spp_ptr[spNr]+bytes)) = 0xaa5555aa;
+          }
         }
+        //put an end mark
+        
 
         //ASSERT(IsoTxSamples == 0);
 
         //zero the rest of the buffer
-        ZeroMemory(ptr, (TxReq.buff + txIsoSize) - ptr);
+        //ZeroMemory(ptr, (TxReq.buff + IsoSize) - ptr);
 
         bknd_iso_write(&TxReq);
         NextXfer(mTxReqIdx);
@@ -696,6 +706,7 @@ void CypressDevice::RxIsochCB()
             uint8_t* ptr = RxReq.buff + (i * rxpktSize);
             uint16_t len = (uint16_t)result.length;
             uint16_t samples = len / InStride;
+            spp[i] = (uint8_t)samples;
             IsoTxSamples += samples;
 
             sSampleCounter += samples;

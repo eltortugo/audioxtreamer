@@ -28,7 +28,7 @@ entity isoch_audio_in is
     m_axis_tready: in std_logic;
     m_axis_tdata : out STD_LOGIC_VECTOR(15 downto 0);
 
-    nr_inputs: in std_logic_vector(3 downto 0);
+    nr_inputs: in std_logic_vector(7 downto 0);
     sof_int  : in std_logic;
 
     in_fifo_empty: in std_logic;
@@ -55,7 +55,7 @@ architecture rtl of isoch_audio_in is
   ------------------------------------------------------------------------------------------------------------
 begin
 
-  nr_ins <= to_integer(unsigned(nr_inputs)) + 1;
+  nr_ins <= to_integer(unsigned(nr_inputs))/2;
 
   ------------------------------------------------------------------------------------------------------------
 

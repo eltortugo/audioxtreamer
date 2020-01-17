@@ -29,14 +29,12 @@ constant nr_inputs      : natural := 24;
 
 constant dut_nr_outputs : natural := 24;
 constant dut_nr_inputs  : natural := 24;
-constant payload_size   : natural := (3*nr_outputs)+4;
 
 signal sd_out           : std_logic_vector(dut_nr_outputs/2 -1  downto 0);
 
-type payload is array (0 to  payload_size-1) of std_logic_vector(7 downto 0);
+type payload is array (natural range <>) of std_logic_vector(7 downto 0);
 constant test_data: payload := 
-( X"AA", X"55",
-  X"55", X"AA",
+( --sample 0
    X"A0", X"B0", X"C0" --ch01 
   ,X"A1", X"B1", X"C1" --ch02
   ,X"A2", X"B2", X"C2" --ch03
@@ -55,6 +53,26 @@ constant test_data: payload :=
   ,X"AF", X"BF", X"CF" --ch16
   ,X"D0", X"E0", X"F0" --ch17
   ,X"D1", X"E1", X"F1" --ch18
+--sample 1
+  ,X"A0", X"B0", X"C0" --ch01 
+  ,X"A1", X"B1", X"C1" --ch02
+  ,X"A2", X"B2", X"C2" --ch03
+  ,X"A3", X"B3", X"C3" --ch04
+  ,X"A4", X"B4", X"C4" --ch05
+  ,X"A5", X"B5", X"C5" --ch06
+  ,X"A6", X"B6", X"C6" --ch07
+  ,X"A7", X"B7", X"C7" --ch08
+  ,X"A8", X"B8", X"C8" --ch09
+  ,X"A9", X"B9", X"C9" --ch10
+  ,X"AA", X"BA", X"CA" --ch11
+  ,X"AB", X"BB", X"CB" --ch12
+  ,X"AC", X"BC", X"CC" --ch13
+  ,X"AD", X"BD", X"CD" --ch14
+  ,X"AE", X"BE", X"CE" --ch15
+  ,X"AF", X"BF", X"CF" --ch16
+  ,X"D0", X"E0", X"F0" --ch17
+  ,X"D1", X"E1", X"F1" --ch18
+  ,X"aa", x"55", x"55", x"aa" --eof
   --,X"D2", X"E2", X"F2" --ch19
   --,X"D3", X"E3", X"F3" --ch20
   --,X"D4", X"E4", X"F4" --ch21
@@ -70,6 +88,8 @@ constant test_data: payload :=
   --,X"DE", X"EE", X"FE" --ch31
   --,X"DF", X"EF", X"FF" --ch32
 );
+
+constant payload_size   : natural := test_data'high + 1;--eof
 
 
 signal usb_clk        : std_logic;
@@ -95,6 +115,8 @@ signal nr_writes      : natural;
 signal lsi8_en        : std_logic;
 signal lsi8_rdnck     : std_logic;
 signal lsi8_dio       : std_logic_vector(7 downto 0);
+
+signal counter : std_logic_vector (4 downto 0) := "00000";
 begin
 
 clk_gen(usb_clk, 48_000_000.0 );
@@ -107,9 +129,9 @@ process (usb_clk)
 begin
   if rising_edge(usb_clk) then
     if reset = '1' then
-      out_data <= X"EFEF";
-      wr_counter <= 0;
-    elsif SLRDn = '0' and flaga = '1' then
+      out_data <= test_data(1)& test_data(0);
+      wr_counter <= 1;
+    elsif SLRDn = '0' and SLOEn = '0'and flaga = '1' then
       if wr_counter = (payload_size/2-1) then
         wr_counter <= 0;
       else
@@ -121,14 +143,17 @@ begin
 end process;
 
 process (usb_clk)
-
 begin
   if rising_edge(usb_clk) then
     if reset = '1' then
-      flaga <= '1';
+      counter <= "00000";
+    else
+      counter <= counter + 1;
     end if;
   end if;
 end process;
+
+flaga <= '0' when counter(4 downto 2) = "111" else '1';
 
 process (yamaha_clk)
 variable f256_count : std_logic_vector(7 downto 0);
@@ -178,13 +203,13 @@ begin
   lsi8_en     <= '1';
   wait until rising_edge(usb_clk);
   wait for 1 ps;
-  lsi8_dio    <= x"b8"; -- 24 ins,18 outs
+  lsi8_dio    <= x"12"; -- 18 outs
   wait until rising_edge(usb_clk);
   wait for 1 ps;
   lsi8_rdnck  <= '0';
   wait until rising_edge(usb_clk);
   wait for 1 ps;
-  lsi8_dio    <= x"00";  -- samples deprecated
+  lsi8_dio    <= x"18";  -- 24 ins
   wait until rising_edge(usb_clk);
   wait for 1 ps;
   lsi8_rdnck  <= '1';
