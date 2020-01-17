@@ -41,6 +41,7 @@ sdo_lines   : positive := 12
 
     ez_int      : out std_logic;
     ez_bsy      : out std_logic;
+    ez_sof      : in  std_logic;
     --yamaha external clock and word clock
     ain         : in std_logic_vector( 11 downto 0);
     aout        : out std_logic_vector( 11 downto 0);
@@ -155,6 +156,7 @@ signal midi_out_sink  : std_logic_vector(1 downto 0);
 
 signal spmf   : slv_32;
 signal spmf_t : std_logic;
+signal sof_r  : std_logic_vector(2 downto 0);
 
 
 constant cookie_str :string := "TRTG";
@@ -220,6 +222,21 @@ sr_detect : entity work.sampling_rate_detect
   );
 
 -----------------------------------------------------------------------------------------------------------
+
+p_sof: process(usb_clk)
+begin
+  if rising_edge(usb_clk) then
+    sof_r <= sof_r(1 downto 0) & ez_sof;
+    if usb_reset = '1' then
+      sof_r <= (others => '0');
+    else
+      spmf_t <= '0';
+      if sof_r (2) = '0' and sof_r (1) = '1' then
+        spmf_t <= '1';
+      end if;
+    end if;
+  end if;
+end process;
 
 --spmf_t <= '1' when lsi_rd_addr = X"08" and lsi_rd = '1' else '0';
 
@@ -353,7 +370,7 @@ port map (
   out_fifo_wr   => rcvr_wr,
   out_fifo_data => rcvr_data
 
-  ,uf_pulse      => spmf_t
+  --,uf_pulse      => spmf_t
 );
 ------------------------------------------------------------------------------------------------------------
 io_reset <= '1' when  usb_reset = '1' or reg_ch_params = 0 or (lsi_wr = '1' and lsi_wr_addr = X"04") else '0';
