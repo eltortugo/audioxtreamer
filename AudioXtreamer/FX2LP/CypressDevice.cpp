@@ -331,6 +331,8 @@ static const uint8_t NrASIOBuffs = 16;
 inline void NextASIO(uint8_t& val) { ++val &= (NrASIOBuffs - 1); }
 
 //---------------------------------------------------------------------------------------------
+static const bool AudioOut = true;
+static const bool AudioIn  = true;
 
 void CypressDevice::main()
 {
@@ -398,25 +400,32 @@ void CypressDevice::main()
   status = ztex_default_lsi_set1(mDevHandle, 4, ch_params.u32);
 
 
+  bknd_select_alt_ifc(mDevHandle, 3);
+
+
   for (uint32_t c = 0; c < NrXfers; ++c)
   {
-    mTxRequests[c].handle = mDevHandle;
-    mTxRequests[c].endpoint = mDefOutEP;
-    mTxRequests[c].bufflen = IsoSize;
+    if (AudioOut) {
+      mTxRequests[c].handle = mDevHandle;
+      mTxRequests[c].endpoint = mDefOutEP;
+      mTxRequests[c].bufflen = IsoSize;
 
-    if (bknd_init_write_xfer(mDevHandle, &mTxRequests[c], rxpktCount, rxpktSize)) {
-      mTxRequests[c].ovlp.hEvent = CreateEvent(NULL, FALSE, FALSE, nullptr);
-      ZeroMemory(mTxRequests[c].buff, IsoSize);
-      bknd_iso_write(&mTxRequests[c]);
+      if (bknd_init_write_xfer(mDevHandle, &mTxRequests[c], rxpktCount, rxpktSize)) {
+        mTxRequests[c].ovlp.hEvent = CreateEvent(NULL, FALSE, FALSE, nullptr);
+        ZeroMemory(mTxRequests[c].buff, IsoSize);
+        bknd_iso_write(&mTxRequests[c]);
+      }
     }
 
-    mRxRequests[c].handle = mDevHandle;
-    mRxRequests[c].endpoint = mDefInEP;
-    mRxRequests[c].bufflen = IsoSize;
+    if (AudioIn) {
+      mRxRequests[c].handle = mDevHandle;
+      mRxRequests[c].endpoint = mDefInEP;
+      mRxRequests[c].bufflen = IsoSize;
 
-    if (bknd_init_read_xfer(mDevHandle, &mRxRequests[c], rxpktCount, rxpktSize)) {
-      mRxRequests[c].ovlp.hEvent = CreateEvent(NULL, FALSE, FALSE, nullptr);
-      bknd_iso_read(&mRxRequests[c]);
+      if (bknd_init_read_xfer(mDevHandle, &mRxRequests[c], rxpktCount, rxpktSize)) {
+        mRxRequests[c].ovlp.hEvent = CreateEvent(NULL, FALSE, FALSE, nullptr);
+        bknd_iso_read(&mRxRequests[c]);
+      }
     }
   }
 
@@ -449,8 +458,6 @@ void CypressDevice::main()
 
 
   HANDLE timerH = CreateWaitableTimer(NULL, FALSE, nullptr);
-  LARGE_INTEGER li;
-  li.QuadPart = -10 *1000000;
 
   ZeroMemory(&mXferEp0Status, sizeof(mXferEp0Status));
   mXferEp0Status.handle = mDevHandle;
@@ -463,6 +470,8 @@ void CypressDevice::main()
   mXferEp0Status.ovlp.hEvent = CreateEvent(NULL, FALSE, FALSE, nullptr);
 
 
+  LARGE_INTEGER li;
+  li.QuadPart = -2500000;//in 200ms
   SetWaitableTimer(timerH, &li, 250, NULL, NULL, false);
   
   bool ErrorBreak = false;
@@ -471,21 +480,22 @@ void CypressDevice::main()
   {
 
     HANDLE events[] = {
-      mTxRequests[mTxReqIdx].ovlp.hEvent,
-      mRxRequests[mRxReqIdx].ovlp.hEvent,
-      mASIOHandle,
       timerH,
-      mXferEp0Status.ovlp.hEvent
+      mXferEp0Status.ovlp.hEvent,
+      mASIOHandle,
+      mRxRequests[mRxReqIdx].ovlp.hEvent,
+      mTxRequests[mTxReqIdx].ovlp.hEvent
     };
-    DWORD wfmo = WaitForMultipleObjects(5 , events, false, 200);
+    uint8_t event_count = 2 + (AudioIn || AudioOut? 1:0) + (AudioIn ? 1: 0) + (AudioOut? 1:0);
+    DWORD wfmo = WaitForMultipleObjects( event_count, events, false, 200);
 
     switch (wfmo)
     {
-    case WAIT_OBJECT_0    : TxIsochCB();    break;//tx iso
-    case WAIT_OBJECT_0 + 1: RxIsochCB();    break;//rx isoch
+    case WAIT_OBJECT_0    : TimerCB();      break;// 1/4 sec timer 
+    case WAIT_OBJECT_0 + 1: Ep0StatusCB();  break;
     case WAIT_OBJECT_0 + 2: AsioClientCB(); break;//ASIO ready
-    case WAIT_OBJECT_0 + 3: TimerCB();      break;// 1/4 sec timer
-    case WAIT_OBJECT_0 + 4: Ep0StatusCB();  break;
+    case WAIT_OBJECT_0 + 3: RxIsochCB();    break;//rx isoch
+    case WAIT_OBJECT_0 + 4: TxIsochCB();    break;//tx iso
 
     default: //not good
       if (wfmo == 0xffffffff)
@@ -517,13 +527,19 @@ void CypressDevice::main()
   }
 
   for (uint32_t c = 0; c < NrXfers; ++c){
-    WaitForSingleObject(mRxRequests[c].ovlp.hEvent, 500);
-    CloseHandle(mRxRequests[c].ovlp.hEvent);
-    bknd_xfer_cleanup(&mRxRequests[c]);
-    WaitForSingleObject(mTxRequests[c].ovlp.hEvent, 500);
-    CloseHandle(mTxRequests[c].ovlp.hEvent);
-    bknd_xfer_cleanup(&mTxRequests[c]);
+    if (AudioIn) {
+      WaitForSingleObject(mRxRequests[c].ovlp.hEvent, 500);
+      CloseHandle(mRxRequests[c].ovlp.hEvent);
+      bknd_xfer_cleanup(&mRxRequests[c]);
+    }
+    if (AudioOut) {
+      WaitForSingleObject(mTxRequests[c].ovlp.hEvent, 500);
+      CloseHandle(mTxRequests[c].ovlp.hEvent);
+      bknd_xfer_cleanup(&mTxRequests[c]);
+    }
   }
+
+  bknd_select_alt_ifc(mDevHandle, 0); //release the bandwidth
 
   AvRevertMmThreadCharacteristics(AvrtHandle);
 
@@ -655,9 +671,14 @@ void CypressDevice::TxIsochCB()
 
 void CypressDevice::TimerCB()
 {
+  static uint8_t count = 0;
   //LOGN(" %u Samples/sec\r", sSampleCounter);
-  mDevStatus.SwSR = sSampleCounter*4;
-  sSampleCounter = 0;
+  if (++count == 4)
+  {
+    count = 0;
+    mDevStatus.SwSR = sSampleCounter;
+    sSampleCounter = 0;
+  }
 
   control_xfer(mXferEp0Status);
 
@@ -697,71 +718,74 @@ void CypressDevice::Ep0StatusCB()
 
 void CypressDevice::RxIsochCB()
 {
-        XferReq& RxReq = mRxRequests[mRxReqIdx];
-        for (uint32_t i = 0; i < rxpktCount; i++)
-        {
-          IsoReqResult result = bknd_iso_get_result(&RxReq, i);
-          if (result.status == 0 && result.length > 0) //a filled block
+  XferReq& RxReq = mRxRequests[mRxReqIdx];
+  for (uint32_t i = 0; i < rxpktCount; i++)
+  {
+    IsoReqResult result = bknd_iso_get_result(&RxReq, i);
+    if (result.status == 0 && result.length > 0) //a filled block
+    {
+      uint8_t* ptr = RxReq.buff + (i * rxpktSize);
+      uint16_t len = (uint16_t)result.length;
+      uint16_t samples = len / InStride;
+      //uint16_t residual = len % InStride;
+      //ASSERT(residual == 0);
+      spp[i] = (uint8_t)samples;
+      IsoTxSamples += samples;
+
+      sSampleCounter += samples;
+
+      if ((len + RxProgress) <= INBuffSize) {
+        memcpy(asioInPtr[RxBuff] + RxProgress, ptr, len);
+        RxProgress += len;
+        len = 0;
+      }
+      else {
+        memcpy(asioInPtr[RxBuff] + RxProgress, ptr, INBuffSize - RxProgress);
+        len -= INBuffSize - RxProgress;
+        ptr += INBuffSize - RxProgress;
+        RxProgress = INBuffSize;
+      }
+
+      if (RxProgress == INBuffSize) {//Packet complete, dispatch to client
+        uint8_t next = RxBuff;
+        NextASIO(next);
+        if (ClientActive) {
+
+          if (RxBuff == AsioBuff)
+            UpdateClient();
+
+          if (AudioOut == false || next != TxBuff)
+            RxBuff = next;
+          else
           {
-            uint8_t* ptr = RxReq.buff + (i * rxpktSize);
-            uint16_t len = (uint16_t)result.length;
-            uint16_t samples = len / InStride;
-            spp[i] = (uint8_t)samples;
-            IsoTxSamples += samples;
-
-            sSampleCounter += samples;
-
-            if ((len + RxProgress) <= INBuffSize) {
-              memcpy(asioInPtr[RxBuff] + RxProgress, ptr, len);
-              RxProgress += len;
-              len = 0;
-            }
-            else {
-              memcpy(asioInPtr[RxBuff] + RxProgress, ptr, INBuffSize - RxProgress);
-              len -= INBuffSize - RxProgress;
-              ptr += INBuffSize - RxProgress;
-              RxProgress = INBuffSize;
-            }
-
-            if (RxProgress == INBuffSize) {//Packet complete, dispatch to client
-              uint8_t next = RxBuff;
-              NextASIO(next);
-              if (ClientActive) {
-
-                if (RxBuff == AsioBuff)
-                  UpdateClient();
-
-                if (next != TxBuff)
-                  RxBuff = next;
-                else
-                {
-                  ClientActive = devClient.ClientPresent();
-                  LOG0("ASIO queue full!");
-                }
-              }
-              else
-              {//just keep filling new ones 
-                AsioBuff = RxBuff;
-                TxBuff = RxBuff;
-                RxBuff = next;
-                TxBuffPos = 0;
-              }
-
-              RxProgress = len;
-              memcpy(asioInPtr[RxBuff], ptr, len);
-            }
-
-            if (RxProgress > INBuffSize) //missed something, start again
-            {
-              mDevStatus.ResyncErrors++;
-              LOGN("Missed %u ISOCH packets\n", mDevStatus.ResyncErrors);
-              RxProgress = 0;
-            }
+            ClientActive = devClient.ClientPresent();
+            LOG0("ASIO queue full!");
           }
         }
-        //fire again
-        bknd_iso_read(&RxReq);
-        NextXfer(mRxReqIdx);
+        else
+        {//just keep filling new ones 
+          AsioBuff = RxBuff;
+          TxBuff = RxBuff;
+          RxBuff = next;
+          TxBuffPos = 0;
+          RxProgress = 0;
+        }
+
+        RxProgress = len;
+        memcpy(asioInPtr[RxBuff], ptr, len);
+      }
+
+      if (RxProgress > INBuffSize) //missed something, start again
+      {
+        mDevStatus.ResyncErrors++;
+        LOGN("Missed %u ISOCH packets\n", mDevStatus.ResyncErrors);
+        RxProgress = 0;
+      }
+    }
+  }
+  //fire again
+  bknd_iso_read(&RxReq);
+  NextXfer(mRxReqIdx);
 }
 
 //---------------------------------------------------------------------------------------------

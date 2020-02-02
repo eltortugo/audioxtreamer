@@ -38,7 +38,7 @@ generic(
     out_fifo_wr   : out std_logic;
     out_fifo_data : out slv24_array(0 to (max_sdo_lines*2)-1);
 
-    uf_pulse      : out std_logic
+    sof           : in std_logic
 
     );
 end entity;
@@ -48,13 +48,11 @@ end entity;
 architecture rtl of isoch_audio_out is
 
 -- RX FSM
-type rx_state_t is (init, w0, w1, w2,flush);
+type rx_state_t is (init, w0, w1, w2);
 signal rx_state : rx_state_t;
 --attribute fsm_encoding : string;
 --attribute fsm_encoding of rx_state : signal is "one-hot";
 
-signal t_valid_r  : std_logic;
-signal uframe_end : std_logic;
 signal outs_counter, active_outs: natural range 0 to max_sdo_lines-1;
 signal eof        : std_logic;
 signal eof_r      : slv_16;
@@ -67,37 +65,11 @@ signal out_fifo_data_regs : slv24_array(0 to (max_sdo_lines*2)-1);
 ------------------------------------------------------------------------------------------------------------
 begin
 
-  p_uframe_end: process (usb_clk)
-     --at 48mhz, times-out after 120 usec from the 125us/uframe, so we dont expect any other additional transaction
-    constant timer_start : natural := 5760;
-    variable counter : natural range 0 to timer_start := timer_start;
-
-  begin
-    if rising_edge(usb_clk) then
-      if reset = '1' then
-        uframe_end <= '0';
-        counter := timer_start;
-        t_valid_r <= '0';
-      else
-        t_valid_r <= s_axis_tvalid;
-        uframe_end <= '0';
-        if counter = 0 then
-          uframe_end <= '1';
-          counter := timer_start;
-        elsif counter < timer_start or (t_valid_r = '0' and s_axis_tvalid = '1') then --edge
-          counter := counter -1;
-        end if;
-      end if;
-    end if;
-  end process;
-  
-  uf_pulse <= uframe_end;
-
 ------------------------------------------------------------------------------------------------------------
 rcvr_FSM: process (usb_clk)
 begin
   if rising_edge(usb_clk) then
-    if reset = '1' or uframe_end = '1' then
+    if reset = '1' or sof = '1' then
       eof <= '0';
       eof_r <= x"0000";
     elsif s_axis_tvalid = '1' and eof = '0' then
@@ -128,8 +100,6 @@ begin
         if s_axis_tvalid = '1' and ( outs_counter < active_outs-1 or out_fifo_full = '0') then
           rx_state <= w0;
         end if;
-      when flush => null;
-
       end case;
     end if;
   end if; 
@@ -146,7 +116,7 @@ s_axis_tready <= '0' when (rx_state = init and eof = '0') or (rx_state = w2 and 
 process (usb_clk)
 begin
   if rising_edge (usb_clk) then
-    if reset = '1' or uframe_end = '1' then
+    if reset = '1' or (sof = '1' and eof = '1') then
       outs_counter <= 0;
     elsif rx_state = w2 and s_axis_tvalid = '1' then
       if outs_counter < active_outs-1 then

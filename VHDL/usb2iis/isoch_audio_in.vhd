@@ -47,10 +47,13 @@ architecture rtl of isoch_audio_in is
   signal word_counter: natural range 0 to 512 ;
   signal sample_complete : std_logic;
 
-  signal nr_ins : natural range 0 to max_sdi_lines;
+  signal nr_ins : natural range 0 to (max_sdi_lines-1);
   signal in_fifo_index: natural range 0 to (max_sdi_lines*2)-1;
   signal fifo_rd   : std_logic;
   signal tvalid   : std_logic;
+  
+  attribute keep : string;
+  attribute keep of sample_complete : signal is "true";
 
   ------------------------------------------------------------------------------------------------------------
 begin
@@ -96,7 +99,7 @@ begin
       if reset = '1' then
         word_counter <= 0;
       elsif sample_complete = '1' then
-        if in_fifo_empty = '1' or (word_counter + (nr_ins*3)) > 511 then
+        if in_fifo_empty = '1' or (word_counter + (nr_ins*3)) >= 512 then
           word_counter <= 0;
         elsif in_fifo_empty = '0' and tvalid = '1' and m_axis_tready = '1' and word_counter < 511 then
           word_counter <= word_counter +1;
@@ -125,7 +128,9 @@ begin
   fifo_index : process (clk)
   begin
     if rising_edge(clk) then
-      if tvalid = '1' and m_axis_tready = '1' and  (word_counter mod 3) = 2 then
+      if reset = '1' then
+        in_fifo_index <= 0;
+      elsif tvalid = '1' and m_axis_tready = '1' and  (word_counter mod 3) = 2 then
         if in_fifo_index/2 = nr_ins-1 then
           in_fifo_index <= 0;
         else

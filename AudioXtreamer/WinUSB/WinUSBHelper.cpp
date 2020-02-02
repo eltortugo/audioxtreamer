@@ -350,6 +350,21 @@ BOOL winusb_control_xfer(XferReq & xf)
   }
 }
 
+bool winusb_select_alt_ifc(HANDLE handle,uint8_t i)
+{
+  BOOL ret = WinUsb_SetCurrentAlternateSetting(handle, i);
+  if (ret == FALSE)
+  {
+    LOGN("WinUsb_GetAssociatedInterface GetLastError:0x%08X\n", GetLastError());
+  }
+  return ret ==TRUE?true:false;
+}
+
+BOOL winusb_free(HANDLE handle)
+{
+  return WinUsb_Free(handle);
+}
+
 struct winusb_iso_info
 {
   WINUSB_ISOCH_BUFFER_HANDLE isoBuffHandle;
@@ -460,5 +475,6 @@ const USB_BACKEND_XFER bknd_iso_read            = winusb_iso_read;
 const USB_BACKEND_XFER bknd_iso_write           = winusb_iso_write;
 const USB_BACKEND_ISO_GET_RESULT bknd_iso_get_result= winusb_iso_result;
 const USB_BACKEND_XFER bknd_xfer_cleanup = winusb_iso_cleanup;
-const USB_BACKEND_ABORT bknd_abort_pipe = winusb_abort_pipe;
+const USB_BACKEND_HI bknd_abort_pipe = winusb_abort_pipe;
+const USB_BACKEND_HI bknd_select_alt_ifc = winusb_select_alt_ifc;
 

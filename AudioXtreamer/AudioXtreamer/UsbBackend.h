@@ -34,7 +34,7 @@ typedef bool(*USB_BACKEND_INIT_ISO_PRIV)(HANDLE handle, XferReq* req, const size
 typedef bool(*USB_BACKEND_XFER)(XferReq* req);
 typedef IsoReqResult(*USB_BACKEND_ISO_GET_RESULT)(XferReq* req, uint32_t idx);
 typedef bool(*USB_BKND_OPEN_CLOSE)(HANDLE& dev, HANDLE& file);
-typedef bool(*USB_BACKEND_ABORT)(HANDLE handle, uint8_t ep);
+typedef bool(*USB_BACKEND_HI)(HANDLE handle, uint8_t i);
 
 extern const USB_BKND_OPEN_CLOSE bknd_open;
 extern const USB_BKND_OPEN_CLOSE bknd_close;
@@ -52,5 +52,7 @@ extern const USB_BACKEND_XFER bknd_bulk_write;
 
 extern const USB_BACKEND_ISO_GET_RESULT bknd_iso_get_result;
 
-extern const USB_BACKEND_ABORT bknd_abort_pipe;
+extern const USB_BACKEND_HI bknd_abort_pipe;
+extern const USB_BACKEND_HI bknd_select_alt_ifc;
+
 

@@ -16,7 +16,8 @@ entity sample_counter is
 end entity;
 
 architecture rtl of sample_counter is
-  signal f256_ctr: std_logic_vector(16 downto 0);  --will result in 4.13 format
+  signal f256_ctr : std_logic_vector(16 downto 0);  --will result in 4.13 format
+  signal f256_ctr2: std_logic_vector(16 downto 0);  --will result in 4.13 format
 
   signal gate    : std_logic;
   signal gate_r  : std_logic_vector(3 downto 0);
@@ -35,8 +36,10 @@ begin
         gate_r <= (others=> '0');
       else
         gate_r <=  gate_r(2 downto 0) & gate;
-        if gate_r(3) = '1' and gate_r(2) = '0' then
+        if    gate_r(3) = '1' and gate_r(2) = '0' then
           spmf <= x"000" & f256_ctr & "000";
+        elsif gate_r(3) = '0' and gate_r(2) = '1' then
+          spmf <= x"000" & f256_ctr2 & "000";
         end if;
       end if;
     end if;
@@ -67,6 +70,14 @@ begin
       f256_ctr <= (others=> '0');
     elsif rising_edge(f256) and gate_r(0) = '1' then
       f256_ctr <= f256_ctr + 1;
+    end if;
+  end process;
+  p2_f256 : process(f256,gate_r,c_rst)
+  begin
+    if c_rst = '1' and gate_r(0) = '1' then
+      f256_ctr2 <= (others=> '0');
+    elsif rising_edge(f256) and gate_r(0) = '0' then
+      f256_ctr2 <= f256_ctr2 + 1;
     end if;
   end process;
 end architecture;

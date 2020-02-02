@@ -155,7 +155,7 @@ signal midi_out_busy  : std_logic;
 signal midi_out_sink  : std_logic_vector(1 downto 0);
 
 signal spmf   : slv_32;
-signal spmf_t : std_logic;
+signal sof : std_logic;
 signal sof_r  : std_logic_vector(2 downto 0);
 
 
@@ -197,6 +197,7 @@ with lsi_rd_addr select lsi_rd_data <=
   X"00000001" when X"01", -- the current version of the fpga
   x"00" & rd_data_count(0) & reg_sr_count when X"02",           -- sampling rate counter to detect the word clock and the out fifo level
   in_fifo_full_count & out_fifo_skip_count when X"03",  -- fifo empty /full counters
+  reg_ch_params when X"04",
 
   spmf when X"08",
 
@@ -230,9 +231,9 @@ begin
     if usb_reset = '1' then
       sof_r <= (others => '0');
     else
-      spmf_t <= '0';
+      sof <= '0';
       if sof_r (2) = '0' and sof_r (1) = '1' then
-        spmf_t <= '1';
+        sof <= '1';
       end if;
     end if;
   end if;
@@ -246,7 +247,7 @@ sample_counter_inst: entity work.sample_counter
     clk   => usb_clk,
     rst   => usb_reset,
     f256  => f256_clk,
-    trig  => spmf_t,
+    trig  => sof,
     spmf  => spmf
   );
 
@@ -368,9 +369,9 @@ port map (
   nr_outputs    => reg_ch_params(7 downto 0),
   out_fifo_full => rcvr_fifo_full,
   out_fifo_wr   => rcvr_wr,
-  out_fifo_data => rcvr_data
+  out_fifo_data => rcvr_data,
 
-  --,uf_pulse      => spmf_t
+  sof           => sof
 );
 ------------------------------------------------------------------------------------------------------------
 io_reset <= '1' when  usb_reset = '1' or reg_ch_params = 0 or (lsi_wr = '1' and lsi_wr_addr = X"04") else '0';
@@ -523,7 +524,7 @@ begin
 end process;
 
 ------------------------------------------------------------------------------------------------------------
-tx_reset <= '1' when reg_ch_params = 0 else '0';
+tx_reset <= '1' when reg_ch_params(15 downto 8) = 0 else '0';
 ------------------------------------------------------------------------------------------------------------
 xmtr: entity work.isoch_audio_in
 generic map (
