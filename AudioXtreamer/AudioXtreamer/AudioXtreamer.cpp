@@ -45,7 +45,7 @@ BOOL CAudioXtreamerApp::InitInstance()
   hXtreamerEvent = CreateEvent(NULL, FALSE, TRUE, szNameXtreamerEvent);
   ResetEvent(hXtreamerEvent);
 
-  //Create the named shared memory mapping (4*256k) and synchronization events for IPC
+  //Create the named shared memory mapping and synchronization events for IPC
 
   hMapFile = CreateFileMapping(
     INVALID_HANDLE_VALUE,    // use paging file

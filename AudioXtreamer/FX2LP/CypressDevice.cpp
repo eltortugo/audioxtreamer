@@ -1,4 +1,4 @@
-﻿#include "stdafx.h"
+#include "stdafx.h"
 
 #include <process.h>
 #include <stdio.h>
@@ -320,9 +320,9 @@ static const uint16_t Sine48[48] =
 4390, 6771, 9597, 12820, 16384, 20228, 24287, 28490 };
 
 //---------------------------------------------------------------------------------------------
-static const uint16_t rxpktSize = 1024;
-static const uint16_t rxpktCount = 16;
-static const uint16_t IsoSize = rxpktCount * rxpktSize;
+static const uint32_t rxpktSize = 1024;
+static const uint32_t rxpktCount = 16;
+static const uint32_t IsoSize = rxpktCount * rxpktSize;
 
 //must be a power of two
 static const uint8_t NrXfers = 2;
@@ -341,8 +341,9 @@ void CypressDevice::main()
     //signal the parent of the thread failure
     return;
 
+  bool ErrorBreak = false;
   mExitHandle = CreateEvent(NULL, TRUE, FALSE, NULL);
-  ResetEvent(mExitHandle);
+  ResetEvent(mExitHandle);  
 
   DWORD proAudioIndex = 0;
   HANDLE AvrtHandle = AvSetMmThreadCharacteristics(L"Pro Audio", &proAudioIndex);
@@ -390,46 +391,41 @@ void CypressDevice::main()
 
   XferReq RxRequests[NrXfers];
   XferReq TxRequests[NrXfers];
-  ZeroMemory(RxRequests, sizeof(mRxRequests));
+  ZeroMemory(RxRequests, sizeof(RxRequests));
   ZeroMemory(TxRequests, sizeof(TxRequests));
   mRxRequests = RxRequests;
   mTxRequests = TxRequests;
 
-
-  uint32_t status = ztex_xlabs_init_fifos(mDevHandle);
-  status = ztex_default_lsi_set1(mDevHandle, 4, ch_params.u32);
-
-
+  bknd_select_alt_ifc(mDevHandle, 0);
+  Sleep(100);
   bknd_select_alt_ifc(mDevHandle, 3);
-
-
-  for (uint32_t c = 0; c < NrXfers; ++c)
+  //INIT the buffers based on the active alternate setting
+  for (uint32_t i = 0; i < NrXfers; ++i)
   {
     if (AudioOut) {
-      mTxRequests[c].handle = mDevHandle;
-      mTxRequests[c].endpoint = mDefOutEP;
-      mTxRequests[c].bufflen = IsoSize;
+      mTxRequests[i].handle = mDevHandle;
+      mTxRequests[i].endpoint = mDefOutEP;
+      mTxRequests[i].bufflen = IsoSize;
 
-      if (bknd_init_write_xfer(mDevHandle, &mTxRequests[c], rxpktCount, rxpktSize)) {
-        mTxRequests[c].ovlp.hEvent = CreateEvent(NULL, FALSE, FALSE, nullptr);
-        ZeroMemory(mTxRequests[c].buff, IsoSize);
-        bknd_iso_write(&mTxRequests[c]);
+      if (bknd_init_write_xfer(mDevHandle, &mTxRequests[i], rxpktCount, rxpktSize)) {
+        mTxRequests[i].ovlp.hEvent = CreateEvent(NULL, FALSE, FALSE, nullptr);
+        ZeroMemory(mTxRequests[i].buff, IsoSize);
+
+        for (uint8_t c = 0; c < rxpktCount; ++c)
+          *(uint32_t*)(mTxRequests[i].buff + (rxpktSize * c)) = 0xaa5555aa;
       }
     }
 
     if (AudioIn) {
-      mRxRequests[c].handle = mDevHandle;
-      mRxRequests[c].endpoint = mDefInEP;
-      mRxRequests[c].bufflen = IsoSize;
+      mRxRequests[i].handle = mDevHandle;
+      mRxRequests[i].endpoint = mDefInEP;
+      mRxRequests[i].bufflen = IsoSize;
 
-      if (bknd_init_read_xfer(mDevHandle, &mRxRequests[c], rxpktCount, rxpktSize)) {
-        mRxRequests[c].ovlp.hEvent = CreateEvent(NULL, FALSE, FALSE, nullptr);
-        bknd_iso_read(&mRxRequests[c]);
+      if (bknd_init_read_xfer(mDevHandle, &mRxRequests[i], rxpktCount, rxpktSize)) {
+        mRxRequests[i].ovlp.hEvent = CreateEvent(NULL, FALSE, FALSE, nullptr);
       }
     }
   }
-
-  mDevStatus.LastSR = -1;
 
   /*The shared mem is a single linear space where we put samples for the asio client
     and where the asio client puts output samples.
@@ -456,9 +452,6 @@ void CypressDevice::main()
   mASIOHandle = devClient.GetSwitchHandle();
   ResetEvent(mASIOHandle);
 
-
-  HANDLE timerH = CreateWaitableTimer(NULL, FALSE, nullptr);
-
   ZeroMemory(&mXferEp0Status, sizeof(mXferEp0Status));
   mXferEp0Status.handle = mDevHandle;
   mXferEp0Status.bmRequestType = 0xc0;
@@ -470,11 +463,25 @@ void CypressDevice::main()
   mXferEp0Status.ovlp.hEvent = CreateEvent(NULL, FALSE, FALSE, nullptr);
 
 
+  HANDLE timerH = CreateWaitableTimer(NULL, FALSE, nullptr);
   LARGE_INTEGER li;
   li.QuadPart = -2500000;//in 200ms
   SetWaitableTimer(timerH, &li, 250, NULL, NULL, false);
-  
-  bool ErrorBreak = false;
+
+  uint32_t status = 0;
+  status = ztex_xlabs_init_fifos(mDevHandle);
+  status = ztex_default_lsi_set1(mDevHandle, 4, ch_params.u32);
+
+  for (uint32_t i = 0; i < NrXfers; ++i)
+  {
+    if (AudioOut)
+      bknd_iso_write(&mTxRequests[i]);
+
+    if (AudioIn)
+      bknd_iso_read(&mRxRequests[i]);
+  }
+
+  mDevStatus.LastSR = -1;
 
   while (WaitForSingleObject(mExitHandle, 0) == WAIT_TIMEOUT)
   {
@@ -563,7 +570,7 @@ static uint8_t spp[rxpktCount] = { 0 };
 static uint8_t spNr = 0;
 
 //traverses the spp array copying samples from the asio buff to the microframes based on the received distribution
-uint8_t DistributeSamples( uint8_t* uf_ptrs[rxpktCount] , uint8_t*src, uint8_t NrSamples, uint16_t OUTStride)
+uint8_t DistributeSamples( uint8_t* uf_ptrs[rxpktCount] , uint8_t*src, uint8_t NrSamples, uint32_t OUTStride)
 {
   uint8_t progress = NrSamples;
   while( spNr < rxpktCount && NrSamples > 0 )
@@ -571,7 +578,7 @@ uint8_t DistributeSamples( uint8_t* uf_ptrs[rxpktCount] , uint8_t*src, uint8_t N
     if (spp[spNr])
     {
       uint8_t samples = min(NrSamples, spp[spNr]);
-      uint16_t bytes = samples * OUTStride;
+      uint32_t bytes = samples * OUTStride;
       memcpy(uf_ptrs[spNr], src, bytes);
       src += bytes;
       NrSamples -= samples;
@@ -598,7 +605,7 @@ void CypressDevice::TxIsochCB()
         uint8_t* ptr = TxReq.buff;
         ZeroMemory(ptr, IsoSize);
 
-        uint16_t TxSamples = min(IsoTxSamples, IsoSize / OUTStride);
+        uint32_t TxSamples = min(IsoTxSamples, IsoSize / OUTStride);
         // distribute the samples on the microframes based on the last received isoch xfer, implicit feedback
 
         spNr = 0;
@@ -648,15 +655,13 @@ void CypressDevice::TxIsochCB()
         if (TxSamples && (!ClientActive || TxBuff == AsioBuff))
         {
           for (; spNr < rxpktCount; spNr++) {
-            uint16_t bytes = spp[spNr] * OUTStride;
+            uint32_t bytes = spp[spNr] * OUTStride;
             ZeroMemory(spp_ptr[spNr], bytes);
             IsoTxSamples -= spp[spNr];
             //mark the end of frame
             *((uint32_t*)(spp_ptr[spNr]+bytes)) = 0xaa5555aa;
           }
         }
-        //put an end mark
-        
 
         //ASSERT(IsoTxSamples == 0);
 
@@ -725,11 +730,11 @@ void CypressDevice::RxIsochCB()
     if (result.status == 0 && result.length > 0) //a filled block
     {
       uint8_t* ptr = RxReq.buff + (i * rxpktSize);
-      uint16_t len = (uint16_t)result.length;
-      uint16_t samples = len / InStride;
+      uint32_t len = (uint32_t)result.length;
+      uint32_t samples = len / InStride;
       //uint16_t residual = len % InStride;
       //ASSERT(residual == 0);
-      spp[i] = (uint8_t)samples;
+      spp[i] = samples;
       IsoTxSamples += samples;
 
       sSampleCounter += samples;

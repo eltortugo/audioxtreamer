@@ -23,7 +23,7 @@ public:
   afx_msg void OnDestroy();
 
 private:
-  uint16_t mSRvals[16];
+  uint32_t mSRvals[16];
   uint32_t mSRacc;
   uint32_t mLastSR;
   int mIns;

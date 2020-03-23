@@ -13,8 +13,8 @@ LPCTSTR const szNameApp   = _T("TortugASIO Xtreamer");
 
 ASIOSettings::Settings theSettings =
 {
-  { 15, 15, 15,_T("NrIns"),     _T("; zero index based number of pcm LR lines")},
-  { 15, 15, 15,_T("NrOuts"),    _T("; zero index based number of pcm LR lines")},
-  { 64, 64, 255,_T("NrSamples"), _T("; Whats necesary to run smooth using the least 512b usb packets")},
-  { 64, 64, 255,_T("FifoSize"),  _T("; Size of the hardware Out FIFO , multiple of 16")}
+  { 15, 15, 15  ,_T("NrIns"),     _T("; zero index based number of pcm LR lines")},
+  { 15, 15, 15  ,_T("NrOuts"),    _T("; zero index based number of pcm LR lines")},
+  { 64, 64, 1024,_T("NrSamples"), _T("; Whats necesary to run smooth with asio clients")},
+  { 64, 64, 255 ,_T("FifoSize"),  _T("; Size of the hardware Out FIFO , multiple of 16")}
 };

@@ -35,9 +35,9 @@ namespace ASIOSettings
 
 #define WM_XTREAMER WM_APP + 100
 
-//1MB shared memory for asio buffers
-//should suffice for a 16x deep queue 64ch @ 256samples
-#define SH_MEM_BLK_SIZE_SHIFT 20 
+//4MB shared memory for asio buffers
+//should suffice for a 16x deep queue 64ch @ 1024 (4byte) samples
+#define SH_MEM_BLK_SIZE_SHIFT 22 
 
 
 extern const CLSID IID_TORTUGASIO_XTREAMER;

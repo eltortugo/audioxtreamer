@@ -37,17 +37,17 @@ private:
       inst->main();
   }
 
-  uint16_t nrSamples;
+  uint32_t nrSamples;
 
   void UpdateClient();
 
   uint32_t RxProgress;
-  uint16_t InStride;
-  uint16_t INBuffSize;
+  uint32_t InStride;
+  uint32_t INBuffSize;
   void RxIsochCB();
 
-  uint16_t OUTBuffSize;
-  uint16_t OUTStride;
+  uint32_t OUTBuffSize;
+  uint32_t OUTStride;
   void TxIsochCB();
 
   void TimerCB();
@@ -86,10 +86,10 @@ private:
   uint8_t TxBuff;
 
   //The offset(in samples) of the partial buffer we managed to transmit
-  uint16_t TxBuffPos;
+  uint32_t TxBuffPos;
 
   //throttles the output based on the input pace and if no audio is available, helps send as many silence samples
-  uint16_t IsoTxSamples;
+  uint32_t IsoTxSamples;
 
   bool ClientActive;
 

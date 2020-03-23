@@ -60,7 +60,7 @@
       <Directory Id="StartupFolder" Name="Startup" />
     </Directory>
 
-    <Icon Id="AudioXtreamer.exe" SourceFile="..\AudioXtreamer\Release\AudioXtreamer.exe" />
+    <Icon Id="AudioXtreamer.exe" SourceFile="..\AudioXtreamer\x64\Release\AudioXtreamer.exe" />
     <Property Id="ARPPRODUCTICON" Value="AudioXtreamer.exe" />
 
     <Feature Id='Complete' Level='1'>
