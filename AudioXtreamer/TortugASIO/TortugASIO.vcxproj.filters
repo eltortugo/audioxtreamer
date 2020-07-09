@@ -22,6 +22,9 @@
     <Filter Include="Source Files\AudioXtreamer">
       <UniqueIdentifier>{1f7a2deb-f620-43f0-865c-b4e91ebd5e71}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\COMBase">
+      <UniqueIdentifier>{2d360fd0-96ea-47aa-a819-01177423f8f6}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Text Include="ReadMe.txt" />
@@ -32,9 +35,6 @@
     </ClInclude>
     <ClInclude Include="targetver.h">
       <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\ASIOSDK2.3\common\combase.h">
-      <Filter>asio</Filter>
     </ClInclude>
     <ClInclude Include="..\..\ASIOSDK2.3\common\asiosys.h">
       <Filter>asio</Filter>
@@ -63,19 +63,13 @@
     <ClInclude Include="AudioXtreamerDevice.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="COMBase\combase.h">
+      <Filter>Source Files\COMBase</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="TortugASIO.cpp">
       <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\asiosdk2.3\common\combase.cpp">
-      <Filter>asio</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\asiosdk2.3\common\dllentry.cpp">
-      <Filter>asio</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\asiosdk2.3\common\register.cpp">
-      <Filter>asio</Filter>
     </ClCompile>
     <ClCompile Include="Main.cpp">
       <Filter>Source Files</Filter>
@@ -91,6 +85,15 @@
     </ClCompile>
     <ClCompile Include="AudioXtreamerDevice.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="COMBase\combase.cpp">
+      <Filter>Source Files\COMBase</Filter>
+    </ClCompile>
+    <ClCompile Include="COMBase\dllentry.cpp">
+      <Filter>Source Files\COMBase</Filter>
+    </ClCompile>
+    <ClCompile Include="COMBase\register.cpp">
+      <Filter>Source Files\COMBase</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

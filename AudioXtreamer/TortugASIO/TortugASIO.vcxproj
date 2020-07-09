@@ -171,40 +171,30 @@
   <ItemGroup>
     <ClInclude Include="..\..\ASIOSDK2.3\common\asio.h" />
     <ClInclude Include="..\..\ASIOSDK2.3\common\asiosys.h" />
-    <ClInclude Include="..\..\ASIOSDK2.3\common\combase.h" />
     <ClInclude Include="..\..\ASIOSDK2.3\common\iasiodrv.h" />
     <ClInclude Include="..\UsbDev\UsbDev.h" />
     <ClInclude Include="..\AudioXtreamer\ASIOSettings.h" />
     <ClInclude Include="..\AudioXtreamer\ASIOSettingsFile.h" />
     <ClInclude Include="AudioXtreamerDevice.h" />
+    <ClInclude Include="COMBase\combase.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="TortugASIO.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\asiosdk2.3\common\combase.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="..\..\asiosdk2.3\common\dllentry.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="..\..\asiosdk2.3\common\register.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
     <ClCompile Include="..\UsbDev\UsbDev.cpp" />
     <ClCompile Include="..\AudioXtreamer\ASIOSettings.cpp" />
     <ClCompile Include="..\AudioXtreamer\ASIOSettingsFile.cpp" />
     <ClCompile Include="AudioXtreamerDevice.cpp" />
+    <ClCompile Include="COMBase\combase.cpp" />
+    <ClCompile Include="COMBase\dllentry.cpp" />
+    <ClCompile Include="COMBase\register.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="Main.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
