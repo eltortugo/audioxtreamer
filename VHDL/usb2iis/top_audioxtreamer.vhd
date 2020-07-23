@@ -28,7 +28,7 @@ sdo_lines   : positive := 12
   Port (
     areset      : in std_logic;
     --Cypress interface
-    cy_clk      : in STD_LOGIC; -- 48Mhz
+    usb_clk      : in STD_LOGIC; -- 48Mhz
     DIO         : inout STD_LOGIC_VECTOR(15 downto 0);
     -- FIFO control
     SLWRn, SLRDn, SLOEn : out STD_LOGIC;
@@ -47,8 +47,8 @@ sdo_lines   : positive := 12
     aout        : out std_logic_vector( 11 downto 0);
     txb_oe      : out std_logic;
     spdif_out1  : out std_logic;
-    ymh_clk     : in std_logic;
-    ymh_word_clk: in std_logic;
+    pcm_clk     : in std_logic;
+    word_clk: in std_logic;
 
     midi_rx     : in std_logic_vector( 5 downto 1 );
     midi_tx     : out std_logic_vector( 5 downto 1 )
@@ -73,12 +73,12 @@ begin
   return vec ;
 end function ;
 
-signal f256_clk	:std_logic;
-signal word_clk	:std_logic;
 
-signal sd_reset : std_logic;
-signal usb_clk	:std_logic;
+signal clk48m   : std_logic;
 signal usb_reset : std_logic;
+
+signal clkpcm   : std_logic;
+signal sd_reset : std_logic;
 signal io_reset : std_logic;
 --signal clkgen_locked : std_logic;
 
@@ -169,8 +169,9 @@ txb_oe <= '1';
 sd_in <= ain;
 aout <= sd_out(11 downto 0);
 
-ymh_bufg : BUFG port map( I => ymh_clk, O => f256_clk );
-cy_bufg :  BUFG port map( I => cy_clk, O => usb_clk );
+cy_bufg :  BUFG port map( I => usb_clk, O => clk48m );
+ymh_bufg : BUFG port map( I => pcm_clk, O => clkpcm );
+
 
 ------------------------------------------------------------------------------------------------------------
 
@@ -183,7 +184,7 @@ cy_bufg :  BUFG port map( I => cy_clk, O => usb_clk );
 --  locked => clkgen_locked,
 --  word_clk => word_clk
 --);
-word_clk <= ymh_word_clk;
+
 --clkgen_locked <= areset;
 ------------------------------------------------------------------------------------------------------------
 
@@ -216,17 +217,17 @@ with lsi_rd_addr select lsi_rd_data <=
 
 sr_detect : entity work.sampling_rate_detect
   port map (
-    clk => usb_clk,
+    clk => clk48m,
     rst => usb_reset,
-    pcm_clk => f256_clk,
+    pcm_clk => clkpcm,
     sr_count => reg_sr_count
   );
 
 -----------------------------------------------------------------------------------------------------------
 
-p_sof: process(usb_clk)
+p_sof: process(clk48m)
 begin
-  if rising_edge(usb_clk) then
+  if rising_edge(clk48m) then
     sof_r <= sof_r(1 downto 0) & ez_sof;
     if usb_reset = '1' then
       sof_r <= (others => '0');
@@ -244,9 +245,9 @@ end process;
 sample_counter_inst: entity work.sample_counter
   generic map ( trig_freq => 32)
   port map (
-    clk   => usb_clk,
+    clk   => clk48m,
     rst   => usb_reset,
-    f256  => f256_clk,
+    f256  => clkpcm,
     trig  => sof,
     spmf  => spmf
   );
@@ -254,7 +255,7 @@ sample_counter_inst: entity work.sample_counter
 -----------------------------------------------------------------------------------------------------------
 ez_lsi8_inst: entity work.ez_lsi8
   port map (
-    clk         => usb_clk,
+    clk         => clk48m,
     rst         => usb_reset,
     lsi8_rdnck  => lsi8_rdnck,
     lsi8_en     => lsi8_en,
@@ -270,33 +271,33 @@ ez_lsi8_inst: entity work.ez_lsi8
 
 ------------------------------------------------------------------------------------------------------------
 --synchronize the ft_reset to the ft_clk
-process (usb_clk, areset )
+process (clk48m, areset )
 variable ff: std_logic_vector(2 downto 0);
 begin
   if areset = '1' then
       ff := (others => '1');
-  elsif rising_edge(usb_clk) then
+  elsif rising_edge(clk48m) then
       ff := ff(ff'length-2 downto 0) & '0'; 
   end if;
   usb_reset <= ff(ff'length-1);
 end process;
 ------------------------------------------------------------------------------------------------------------
 --synchronize the sd_reset to the sd_f256_clk
-process (f256_clk, areset )
+process (clkpcm, areset )
 variable ff: std_logic_vector(2 downto 0);
 begin
   if areset = '1' then
       ff := (others => '1');
-  elsif rising_edge(f256_clk) then
+  elsif rising_edge(clkpcm) then
       ff := ff(ff'length-2 downto 0) & '0'; 
   end if;
   sd_reset <= ff(ff'length-1);
 end process;
 
 ------------------------------------------------------------------------------------------------------------
-proc_settings : process(usb_clk)
+proc_settings : process(clk48m)
 begin
-  if rising_edge(usb_clk) then
+  if rising_edge(clk48m) then
     if usb_reset = '1' then
       reg_ch_params <= (others => '0');
     elsif lsi_wr = '1' then
@@ -327,9 +328,9 @@ rcvr_fifo_full <= '1' when (out_fifo_full or out_prog_full) /= 0 else '0';
 --end process;
 
 
-proc_out_fifo_skip : process (f256_clk)
+proc_out_fifo_skip : process (clkpcm)
 begin
-  if rising_edge(f256_clk) then
+  if rising_edge(clkpcm) then
     if sd_reset = '1' or tx_reset = '1' then
       out_fifo_skip_count <= (others => '0');
       out_fifo_skip <= '0';
@@ -342,9 +343,9 @@ begin
   end if;
 end process;
 ------------------------------------------------------------------------------------------------------------
-proc_in_fifo_full : process (f256_clk)
+proc_in_fifo_full : process (clkpcm)
 begin
-  if rising_edge(f256_clk) then
+  if rising_edge(clkpcm) then
     if sd_reset = '1' or tx_reset = '1' then
       in_fifo_full_count <= (others => '0');
     elsif in_fifo_wr_full /= 0 and in_fifo_wr_en = '1' and in_fifo_full_count < X"FFFF" then
@@ -359,7 +360,7 @@ generic map(
   max_sdo_lines => sdo_lines
 )
 port map (
-  usb_clk  => usb_clk,
+  usb_clk  => clk48m,
   reset  => io_reset,
 
   s_axis_tdata  => out_axis_tdata,
@@ -384,12 +385,12 @@ io_reset <= '1' when  usb_reset = '1' or reg_ch_params = 0 or (lsi_wr = '1' and 
 -- reducing the depth will increase drops by a bursty data flow so if the sender can keep the variation
 -- the data flow smooth (5 & 6 samples per microframe "spp" @44k1) the out fifo can go as low as 8 samples
 
-p_fill_out : process (f256_clk,out_fifo_rd_en)
+p_fill_out : process (clkpcm,out_fifo_rd_en)
   variable fill : std_logic := '1';
   variable full_sync : std_logic_vector(2 downto 0) := "000";
 begin
 
-  if rising_edge(f256_clk) then
+  if rising_edge(clkpcm) then
     if sd_reset = '1' then
       fill := '1';
       rcvr_fifo_full_sync <= '0';
@@ -440,9 +441,9 @@ g_out_fifos : for i in 0 to (max_nr_outputs/3) -1 generate
       --prog_full_thresh(8 downto 1) => reg_ch_params(23 downto 16),
       --prog_full_thresh(0) => '0',
       rd_rst  => sd_reset,
-      rd_clk  => f256_clk,
+      rd_clk  => clkpcm,
       wr_rst  => io_reset,
-      wr_clk  => usb_clk
+      wr_clk  => clk48m
     );  
 end generate;
 ------------------------------------------------------------------------------------------------------------
@@ -452,7 +453,7 @@ pcmio_inst: entity work.pcmio
     sdi_lines        => sdi_lines
   )
   port map (
-    f256_clk         => f256_clk,
+    f256_clk         => clkpcm,
     sd_reset         => sd_reset,
     word_clk         => word_clk,
     spdif_out1       => spdif_out1,
@@ -485,9 +486,9 @@ in_fifos : for i in 0 to (max_nr_inputs/3)-1 generate
 
       wr_en 	=> in_fifo_wr_en,
       rd_rst	=> io_reset,
-      rd_clk	=> usb_clk,
+      rd_clk	=> clk48m,
       wr_rst	=> sd_reset,
-      wr_clk	=> f256_clk
+      wr_clk	=> clkpcm
     );
 end generate;
 ------------------------------------------------------------------------------------------------------------
@@ -497,9 +498,9 @@ in_fifo_empty <= '0' when in_fifo_rd_empty = 0 else '1';
 ------------------------------------------------------------------------------------------------------------
 
 --latch the channels when reading @ 0005 to avoid sending data arrived after that
-p_midi_in_valid : process(usb_clk)
+p_midi_in_valid : process(clk48m)
 begin
-  if rising_edge(usb_clk) then
+  if rising_edge(clk48m) then
     if lsi_rd_addr = X"10" and lsi_rd = '1' then
       midi_in_valid_r <= midi_in_valid;
     end if;
@@ -524,14 +525,22 @@ begin
 end process;
 
 ------------------------------------------------------------------------------------------------------------
-tx_reset <= '1' when reg_ch_params(15 downto 8) = 0 else '0';
+p_tx_rst: process (clk48m)
+begin
+  if rising_edge(clk48m) then
+    tx_reset <= '1';
+    if reg_ch_params(15 downto 8) /= 0 then
+      tx_reset <= '0';
+    end if;
+  end if;
+end process;
 ------------------------------------------------------------------------------------------------------------
 xmtr: entity work.isoch_audio_in
 generic map (
   max_sdi_lines => sdi_lines
 ) port map (
   --cypress interface
-  clk  => usb_clk,
+  clk  => clk48m,
   reset=> tx_reset,
 
   nr_inputs       => reg_ch_params(15 downto 8),
@@ -547,11 +556,11 @@ generic map (
   m_axis_tdata    => in_axis_tdata
 );
 ------------------------------------------------------------------------------------------------------------
-i_s_axis_to_w_fifo: entity work.s_axis_to_w_fifo
+usb_mux: entity work.s_axis_to_w_fifo
   generic map (
     DATA_WIDTH => 16
   ) port map (
-    clk  => usb_clk,
+    clk  => clk48m,
     reset=> usb_reset,
 
 -- FX2LP ifc
@@ -582,9 +591,9 @@ i_s_axis_to_w_fifo: entity work.s_axis_to_w_fifo
 ------------------------------------------------------------------------------------------------------------
 --lsi_8 to axis adapter, is just a latch/busy flag to inform the ezusb when the command has not been dispatched
 
-my_process_ssp: process (usb_clk)
+my_process_ssp: process (clk48m)
 begin
-  if rising_edge(usb_clk) then
+  if rising_edge(clk48m) then
     if usb_reset = '1' or midi_out_ready = '1' then
       midi_out_busy <= '0';
     elsif lsi_wr ='1' and lsi_wr_addr = x"10" and midi_out_ready = '0' then
@@ -601,7 +610,7 @@ i_midi_io : entity work.midi_io
 generic map ( NR_CHANNELS => 7 )
 port map
 (
-  clk             => usb_clk,
+  clk             => clk48m,
   reset           => usb_reset,
 
   rx(5 downto 1)  => midi_rx,

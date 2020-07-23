@@ -39,8 +39,8 @@ using namespace ASIOSettings;
 
 uint8_t setyb[256];
 
-CypressDevice::CypressDevice(UsbDeviceClient & client, ASIOSettings::Settings &params )
-  : UsbDevice(client,params)
+CypressDevice::CypressDevice(UsbDeviceClient & client )
+  : UsbDevice(client)
   , asioInPtr(nullptr)
   , asioOutPtr(nullptr)
   , mDevStatus({ 0 })
@@ -199,16 +199,26 @@ bool CypressDevice::Open()
 
       // reset FPGA
       status = (BOOL)control_transfer(handle, 0x40, 0x31, 0, 0, NULL, 0, 1500);
+      if (status != 0)
+        goto err;
       // transfer data
-      status = 0;
+
       uint32_t last_idx = mResourceSize % EP0_TRANSACTION_SIZE;
       int bufs_idx = (mResourceSize / EP0_TRANSACTION_SIZE);
 
       for (int i = 0; (status >= 0) && (i < bufs_idx); i++)
-        status =(BOOL)control_transfer(handle, 0x40, 0x32, 0, 0, mBitstream + (i * EP0_TRANSACTION_SIZE), EP0_TRANSACTION_SIZE, 1500);
+      {
+        status = (BOOL)control_transfer(handle, 0x40, 0x32, 0, 0, mBitstream + (i * EP0_TRANSACTION_SIZE), EP0_TRANSACTION_SIZE, 1500);
+        if (EP0_TRANSACTION_SIZE != status)
+          goto err;
+      }
 
       if (last_idx)
-        status =(BOOL)control_transfer(handle, 0x40, 0x32, 0, 0, mBitstream + bufs_idx * EP0_TRANSACTION_SIZE, last_idx, 1500);
+      {
+        status = (BOOL)control_transfer(handle, 0x40, 0x32, 0, 0, mBitstream + bufs_idx * EP0_TRANSACTION_SIZE, last_idx, 1500);
+        if (last_idx != status)
+          goto err;
+      }
 
     } else {
      goto err;
@@ -350,10 +360,10 @@ void CypressDevice::main()
   AvSetMmThreadPriority(AvrtHandle, AVRT_PRIORITY_CRITICAL);
 
 
-  const uint32_t nrIns = (devParams[NrIns].val + 1) * 2;
-  const uint32_t nrOuts = (devParams[NrOuts].val + 1) * 2;
-  nrSamples = devParams[NrSamples].val;
-  const uint32_t fifoDepth = devParams[FifoDepth].val;
+  const uint32_t nrIns = (theSettings[NrIns].val + 1) * 2;
+  const uint32_t nrOuts = (theSettings[NrOuts].val + 1) * 2;
+  nrSamples = theSettings[NrSamples].val;
+  const uint32_t fifoDepth = theSettings[FifoDepth].val;
 
   InStride = nrIns * 3;
   INBuffSize = (InStride * nrSamples);
@@ -852,5 +862,14 @@ uint32_t CypressDevice::GetSampleRate()
     }
   }
   return lastSR;
+}
+
+//---------------------------------------------------------------------------------------------
+
+ASIOSettings::StreamInfo CypressDevice::GetStreamInfo()
+{
+  ASIOSettings::StreamInfo i;
+  ZeroMemory(&i, sizeof(i));
+  return i;
 }
 

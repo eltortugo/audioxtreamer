@@ -55,7 +55,7 @@ end s_axis_to_w_fifo;
 architecture rtl of s_axis_to_w_fifo is
 
   signal full_reg   : std_logic;
-  signal fifo_wr    : std_logic;
+  signal slwr    : std_logic;
   signal full_sig   : std_logic;
   signal pending_wr : std_logic;
   signal data_reg   : std_logic_vector(DATA_WIDTH-1 downto 0);
@@ -65,7 +65,7 @@ architecture rtl of s_axis_to_w_fifo is
   signal tx_req     : std_logic;
   signal tx_grant   : std_logic;
   signal usb_oe     : std_logic;
-  signal usb_oe_3s  : std_logic;
+  signal usb_oe_3s  : std_logic_vector(DATA_WIDTH-1 downto 0);
   signal tx_full    : std_logic;
   signal rx_data    : std_logic_vector(DATA_WIDTH-1 downto 0);
   signal rx_data_r  : std_logic_vector(DATA_WIDTH-1 downto 0);
@@ -82,7 +82,7 @@ begin
         O => rx_data(i),
         IO => dio(i),
         I => tx_data(i),
-        T => usb_oe_3s
+        T => usb_oe_3s(i)
       );
   end generate;
 
@@ -153,12 +153,12 @@ begin
     if rising_edge(clk) then
       if reset = '1' or tx_req = '0' or tx_full = '1' then
         usb_oe <= '1'; --always receiving unless
-        usb_oe_3s <= '1'; --always receiving unless
+        usb_oe_3s <= (others =>'1'); --always receiving unless
         SLOEn <= '0';
         tx_grant <= '0';
       elsif (FLAGA = '0' or rdn = '1') and usb_oe = '1' and tx_req = '1' then
         usb_oe <= '0';
-        usb_oe_3s <= '0';
+        usb_oe_3s <= (others =>'0');
         SLOEn <= '1'; 
       elsif usb_oe = '0' then
         tx_grant <= '1';
@@ -167,7 +167,7 @@ begin
   end process;
   ------------------------------------------------------------------------------------------------------------
 
-  SLWRn <= not fifo_wr or not FLAGB;--never allow a write when full
+  SLWRn <= not slwr or not FLAGB;--never allow a write when full
 
   --EP2 IN, EP8 OUT
   FIFOADDR0 <= usb_oe;
@@ -177,19 +177,22 @@ begin
 
   full_sig <= tx_grant and not tx_full;
   proc_delay: process (clk) is
+    --variable wr : std_logic := '0';
   begin
     if rising_edge(clk) then
       full_reg <= full_sig;
 
       if reset = '1' then
-        fifo_wr <= '0';
+        slwr <= '0';
       elsif full_reg = '1' and full_sig = '1' then
-        fifo_wr <= s_axis_tvalid;
+        slwr <= s_axis_tvalid;
       elsif pending_wr = '1' and full_sig = '1' then
-        fifo_wr <= '1';
+        slwr <= '1';
       else
-        fifo_wr <= '0';
+        slwr <= '0';
       end if;
+
+      --slwr <= wr;
 
       tlast_reg <= '0';
       if s_axis_tvalid = '1' and tready = '1' then
@@ -199,32 +202,32 @@ begin
 
       if reset = '1' then
         pending_wr <= '0';
-      elsif pending_wr = '0' and full_sig = '0' and (s_axis_tvalid = '1' or fifo_wr = '1') then
+      elsif pending_wr = '0' and full_sig = '0' and (s_axis_tvalid = '1' or slwr = '1') then
         pending_wr <= '1';
-      elsif pending_wr = '1' and fifo_wr = '1' then
+      elsif pending_wr = '1' and slwr = '1' then
         pending_wr <= '0';
       end if;
 
       if reset = '1' then
         tready <= '1';
       elsif tready = '1' and s_axis_tvalid = '1' then
-        if (full_sig = '1' and full_reg = '0' and (fifo_wr = '1' or pending_wr = '1')) or
-           (full_sig = '0' and full_reg = '1' and fifo_wr = '1' and pending_wr = '0') or
-           (full_sig = '0' and full_reg = '0' and fifo_wr = '0' and pending_wr = '1')
+        if (full_sig = '1' and full_reg = '0' and (slwr = '1' or pending_wr = '1')) or
+           (full_sig = '0' and full_reg = '1' and slwr = '1' and pending_wr = '0') or
+           (full_sig = '0' and full_reg = '0' and slwr = '0' and pending_wr = '1')
         then
           tready <= '0';
         end if;
-      elsif tready = '0' and fifo_wr = '1' then
+      elsif tready = '0' and slwr = '1' then
         tready <= '1';
       end if;
 
       pktend  <= '1';
       if reset = '1' then
         tx_data <= X"CDCD";
-      elsif pending_wr = '1' and fifo_wr = '1' then
+      elsif pending_wr = '1' and slwr = '1' then
         tx_data <=  data_reg;
         pktend  <=  not tlast_reg; 
-      elsif pending_wr = '0' and s_axis_tvalid = '1' and ( fifo_wr = '0' or full_sig = '1' ) then
+      elsif pending_wr = '0' and s_axis_tvalid = '1' and ( slwr = '0' or full_sig = '1' ) then
         tx_data <=  s_axis_tdata;
         pktend  <=  not s_axis_tlast;
       end if;
@@ -232,6 +235,6 @@ begin
   end process;
   s_axis_tready <= tready;
 
-  tx_req <= s_axis_tvalid or fifo_wr or pending_wr;
+  tx_req <= s_axis_tvalid or slwr or pending_wr;
 
 end rtl;

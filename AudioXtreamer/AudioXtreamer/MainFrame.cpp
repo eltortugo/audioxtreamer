@@ -41,6 +41,7 @@ MainFrame::MainFrame(UsbDevice & dev)
   RegisterClassEx(&wndc);
 
   mIniFile.Load();
+  theApp.UpdateStreamParams();
 }
 
 
@@ -129,6 +130,7 @@ void MainFrame::NextState(enum State newState)
   switch (mState)
   {
   case stClosed:
+    theApp.UpdateStreamParams();
     if (mDevice.Open())
       mState = stOpen;
     break;

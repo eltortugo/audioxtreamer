@@ -210,19 +210,8 @@ void TortugASIO::SampleRateChanged()
 }
 
 //------------------------------------------------------------------------------------------
-
-ASIOSettings::Settings gSettings =
-{
-  { 15, 15, 15,_T("NrIns"),     _T("; zero index based number of pcm LR lines")},
-  { 15, 15, 15,_T("NrOuts"),    _T("; zero index based number of pcm LR lines")},
-  { 64, 64, 256,_T("NrSamples"), _T("; Whats necesary to run smooth and the least 512b usb packets")},
-  { 64, 64, 256,_T("FifoSize"),  _T("; Size of the hardware Out FIFO")}
-};
-
-//------------------------------------------------------------------------------------------
 TortugASIO::TortugASIO(LPUNKNOWN pUnk, HRESULT *phr)
 : CUnknown(ifaceName, pUnk, phr)
-, mNumSamples(gSettings[NrSamples].val)
 {
   LOG0("TortugASIO::TortugASIO");
 
@@ -247,14 +236,9 @@ TortugASIO::TortugASIO(LPUNKNOWN pUnk, HRESULT *phr)
   mDevice = nullptr;
   InitializeCriticalSection(&cs);
 
-
-  mIniFile = new ASIOSettingsFile(gSettings);
-  if (mIniFile) {
-    mIniFile->Load();
-    mNumInputs = (gSettings[NrIns].val+1)*2;
-    mNumOutputs = (gSettings[NrOuts].val+1)*2;
-  }
-
+  mNumInputs  = 0;
+  mNumOutputs = 0;
+  mNumSamples  = 0;
   blockFrames = mNumSamples;
 }
 
@@ -274,9 +258,6 @@ TortugASIO::~TortugASIO()
 
   disposeBuffers();
   DeleteCriticalSection(&cs);
-
-  delete mIniFile;
-  mIniFile = nullptr;
 }
 
 //------------------------------------------------------------------------------------------
@@ -314,10 +295,14 @@ ASIOBool TortugASIO::init(void* sysRef)
 #if 0
   mDevice = new CypressDevice( *this, gSettings);
 #else
-  mDevice = new AudioXtreamerDevice(*this, gSettings);
+  mDevice = new AudioXtreamerDevice(*this);
 #endif
 
   if (mDevice != nullptr && mDevice->Open()) {
+    ASIOSettings::StreamInfo& s = mDevice->GetStreamInfo();
+    mNumInputs = (s.NrIns + 1) * 2;
+    mNumOutputs = (s.NrOuts + 1) * 2;
+    blockFrames = mNumSamples = s.NrSamples;
     active = true;
     return true;
   }
@@ -376,7 +361,7 @@ ASIOError TortugASIO::getChannels(long *numInputChannels, long *numOutputChannel
 ASIOError TortugASIO::getLatencies(long *_inputLatency, long *_outputLatency)
 {
   *_inputLatency = blockFrames;		// typically;
-  *_outputLatency = blockFrames + gSettings[FifoDepth].val;
+  *_outputLatency = blockFrames + (mDevice == nullptr ? 0 : mDevice->GetStreamInfo().FifoDepth);
   LOGN("TortugASIO::getLatencies %ld:%ld", *_inputLatency, *_outputLatency);
 
   return ASE_OK;
@@ -608,13 +593,12 @@ ASIOError TortugASIO::disposeBuffers()
 ASIOError TortugASIO::controlPanel()
 {
   //send message to AudioXtreamer and wait for the completion of the dialog
-  if ( mDevice != nullptr && mDevice->ConfigureDevice() && mIniFile->Load())
+  if ( mDevice != nullptr && mDevice->ConfigureDevice())
   {
-    mNumInputs = (gSettings[NrIns].val+1)*2;
-    mNumOutputs = (gSettings[NrOuts].val+1)*2;
-    blockFrames = mNumSamples;
-    if(mIniFile) 
-      mIniFile->Save();
+    ASIOSettings::StreamInfo& s = mDevice->GetStreamInfo();
+    mNumInputs = (s.NrIns+1)*2;
+    mNumOutputs = (s.NrOuts+1)*2;
+    blockFrames = mNumSamples = s.NrSamples;
 
     if (callbacks && callbacks->asioMessage)
       callbacks->asioMessage(kAsioResetRequest, 0, 0, 0);

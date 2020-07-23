@@ -40,10 +40,10 @@ public:
   virtual bool GetStatus(UsbDeviceStatus &status) = 0;
   virtual uint32_t GetSampleRate() = 0;
   virtual bool ConfigureDevice() = 0;
+  virtual ASIOSettings::StreamInfo GetStreamInfo() = 0;
 
 protected:
-  UsbDevice(UsbDeviceClient & client, ASIOSettings::Settings & params)
-    : devClient(client), devParams(params) {}
+  UsbDevice(UsbDeviceClient & client)
+    : devClient(client){}
   UsbDeviceClient & devClient;
-  ASIOSettings::Settings & devParams;
 };

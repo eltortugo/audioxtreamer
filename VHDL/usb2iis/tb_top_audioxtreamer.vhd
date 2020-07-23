@@ -238,7 +238,7 @@ port map(
 
     areset => reset,
 
-    cy_clk  => usb_clk,
+    usb_clk  => usb_clk,
     -- DATA IO
     dio    => usb_dio,
 
@@ -252,8 +252,8 @@ port map(
     ain => sd_out(11 downto 0), --loopback
     aout => sd_out(11 downto 0),
 
-    ymh_clk => yamaha_clk,
-    ymh_word_clk => yamaha_word_clk,
+    pcm_clk => yamaha_clk,
+    word_clk => yamaha_word_clk,
 
    lsi8_en    => lsi8_en   ,
    lsi8_rdnck => lsi8_rdnck,

@@ -6,8 +6,8 @@
 #pragma comment(lib, "avrt.lib")
 
 
-AudioXtreamerDevice::AudioXtreamerDevice(UsbDeviceClient & client, ASIOSettings::Settings & params)
-  : UsbDevice(client, params)
+AudioXtreamerDevice::AudioXtreamerDevice(UsbDeviceClient & client)
+  : UsbDevice(client)
   , hMapFile(NULL)
   , hAsioEvent(NULL)
   , hExtreamerEvent(NULL)
@@ -16,8 +16,6 @@ AudioXtreamerDevice::AudioXtreamerDevice(UsbDeviceClient & client, ASIOSettings:
   , pRxBuf(nullptr)
   , pTxBuf(nullptr)
 {
-  
-
 }
 
 
@@ -80,6 +78,15 @@ error:
   return false;
 }
 
+ASIOSettings::StreamInfo AudioXtreamerDevice::GetStreamInfo()
+{
+  ASIOSettings::StreamInfo s;
+  ZeroMemory(&s, sizeof(s));
+  if (pStreamParams == nullptr)
+    return s;
+  else
+    return *(ASIOSettings::StreamInfo*)pStreamParams;
+}
 
 bool
 AudioXtreamerDevice::Start()

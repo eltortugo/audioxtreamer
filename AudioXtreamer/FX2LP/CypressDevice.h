@@ -8,7 +8,7 @@
 class CypressDevice : public UsbDevice
 {
 public:
-  explicit CypressDevice(UsbDeviceClient & client, ASIOSettings::Settings & params);
+  explicit CypressDevice(UsbDeviceClient & client);
   ~CypressDevice() override;
 
   bool Open() override;
@@ -21,7 +21,7 @@ public:
   bool GetStatus(UsbDeviceStatus &status) override;
   uint32_t GetSampleRate() override;
   bool ConfigureDevice() override { return false; }
-  
+  ASIOSettings::StreamInfo GetStreamInfo() override;
 
 private:
 

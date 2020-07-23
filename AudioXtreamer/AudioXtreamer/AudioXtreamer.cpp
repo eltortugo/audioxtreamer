@@ -23,7 +23,7 @@ CAudioXtreamerApp::CAudioXtreamerApp()
 , pBuf(nullptr)
 , hAsioEvent(NULL)
 , hXtreamerEvent(NULL)
-, mDevice(new CypressDevice(*this, theSettings))
+, mDevice(new CypressDevice(*this))
 , mClientActive(false)
 {
 }
@@ -124,7 +124,7 @@ bool CAudioXtreamerApp::ClientPresent()
 
 void CAudioXtreamerApp::AllocBuffers(uint32_t rxSize, uint8_t *& rxBuff, uint32_t txSize, uint8_t *& txBuff)
 {
-  ZeroMemory(pBuf, (4 << SH_MEM_BLK_SIZE_SHIFT));
+  ZeroMemory(pBuf + (1 << SH_MEM_BLK_SIZE_SHIFT), (2 << SH_MEM_BLK_SIZE_SHIFT));
   rxBuff = (uint8_t*)(pBuf + (1 << SH_MEM_BLK_SIZE_SHIFT));
   txBuff = (uint8_t*)(pBuf + (2 << SH_MEM_BLK_SIZE_SHIFT));
   mClientActive = false;
@@ -186,6 +186,17 @@ int CAudioXtreamerApp::ExitInstance()
   }
 
   return CWinAppEx::ExitInstance();
+}
+
+void CAudioXtreamerApp::UpdateStreamParams()
+{
+  if (pBuf != nullptr) {
+    volatile ASIOSettings::StreamInfo* info = (ASIOSettings::StreamInfo*)pBuf;
+    info->NrIns = theSettings[ASIOSettings::NrIns].val;
+    info->NrOuts = theSettings[ASIOSettings::NrOuts].val;
+    info->NrSamples = theSettings[ASIOSettings::NrSamples].val;
+    info->FifoDepth = theSettings[ASIOSettings::FifoDepth].val;
+  }
 }
 
 

@@ -26,6 +26,11 @@ namespace ASIOSettings
     uint32_t TxStride;
     uint32_t TxOffset;
     uint32_t Flags;
+
+    uint32_t NrIns;
+    uint32_t NrOuts;
+    uint32_t NrSamples;
+    uint32_t FifoDepth;
   } StreamInfo;
 
 #pragma pack(pop)

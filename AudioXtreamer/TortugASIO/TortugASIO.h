@@ -64,7 +64,7 @@ public:
   //This is internal channel data buffer. number of Outputs.
   uint8_t	mNumInputs;
   uint8_t	mNumOutputs;
-  int &mNumSamples;
+  int     mNumSamples;
   uint8_t **OutputBuffers;
   uint8_t **InputBuffers;
 
@@ -86,7 +86,6 @@ public:
 
   UsbDevice * mDevice;
 
-  ASIOSettingsFile * mIniFile;
   CRITICAL_SECTION cs;
 
 };

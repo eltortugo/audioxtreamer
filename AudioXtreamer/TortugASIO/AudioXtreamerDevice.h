@@ -3,7 +3,7 @@
 class AudioXtreamerDevice : public UsbDevice
 {
 public:
-  explicit AudioXtreamerDevice(UsbDeviceClient & client, ASIOSettings::Settings & params);
+  explicit AudioXtreamerDevice(UsbDeviceClient & client);
   ~AudioXtreamerDevice();
 
   bool Open() override;
@@ -15,7 +15,8 @@ public:
   bool GetStatus(UsbDeviceStatus &status) override;
   uint32_t GetSampleRate() override;
   bool ConfigureDevice() override;
-  
+  ASIOSettings::StreamInfo AudioXtreamerDevice::GetStreamInfo() override;
+
 private:
 
   void main();

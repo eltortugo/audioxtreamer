@@ -29,6 +29,7 @@ public:
   void SampleRateChanged() override;
 
   bool IsClientActive() { return mClientActive; }
+  void UpdateStreamParams();
 
 protected:
 
