@@ -1,14 +1,29 @@
 #pragma once
 
 
+struct usb_control_setup {
+  uint8_t  bmRequestType;
+  uint8_t  bRequest;
+  uint16_t wValue;
+  uint16_t wIndex;
+  uint16_t wLength;
+};
+
+
+typedef enum
+{
+  eControl,
+  eBulk,
+  eInterrupt,
+  eIsochronous
+} XferType;
+
 typedef struct _XferReq
 {
   HANDLE handle;
+  XferType xtype;
+  struct usb_control_setup stp;
   uint8_t endpoint;
-  uint8_t bmRequestType;
-  uint8_t bRequest;
-  uint16_t wValue;
-  uint16_t wIndex;
   OVERLAPPED ovlp;
   uint32_t bufflen;
   uint8_t* buff;
@@ -30,7 +45,7 @@ typedef int64_t(*USB_BACKEND_CTRL_XFER)(HANDLE handle, uint8_t bmRequestType, ui
 typedef BOOL(*USB_BACKEND_CTRL_XFER_ASYNCH)(XferReq & xfer);
 
 
-typedef bool(*USB_BACKEND_INIT_ISO_PRIV)(HANDLE handle, XferReq* req, const size_t pktCount, const size_t pktSize);
+typedef bool(*USB_BACKEND_INIT_XFER)(HANDLE handle, XferReq* req, const size_t pktCount, const size_t pktSize);
 typedef bool(*USB_BACKEND_XFER)(XferReq* req);
 typedef IsoReqResult(*USB_BACKEND_ISO_GET_RESULT)(XferReq* req, uint32_t idx);
 typedef bool(*USB_BKND_OPEN_CLOSE)(HANDLE& dev, HANDLE& file);
@@ -38,11 +53,11 @@ typedef bool(*USB_BACKEND_HI)(HANDLE handle, uint8_t i);
 
 extern const USB_BKND_OPEN_CLOSE bknd_open;
 extern const USB_BKND_OPEN_CLOSE bknd_close;
+extern const USB_BACKEND_INIT_XFER bknd_init_xfer;
+extern const USB_BACKEND_XFER bknd_xfer_cleanup;
+
 extern const USB_BACKEND_CTRL_XFER control_transfer;
 extern const USB_BACKEND_CTRL_XFER_ASYNCH control_xfer;
-extern const USB_BACKEND_INIT_ISO_PRIV bknd_init_read_xfer;
-extern const USB_BACKEND_XFER bknd_xfer_cleanup;
-extern const USB_BACKEND_INIT_ISO_PRIV bknd_init_write_xfer;
 
 extern const USB_BACKEND_XFER bknd_iso_read;
 extern const USB_BACKEND_XFER bknd_iso_write;

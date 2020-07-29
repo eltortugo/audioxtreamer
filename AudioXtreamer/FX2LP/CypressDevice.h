@@ -52,7 +52,6 @@ private:
 
   void TimerCB();
   XferReq mXferEp0Status;
-  uint8_t mEp0Status[8];
   void Ep0StatusCB();
 
   void AsioClientCB();

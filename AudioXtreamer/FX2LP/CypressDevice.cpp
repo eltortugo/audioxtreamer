@@ -416,8 +416,9 @@ void CypressDevice::main()
       mTxRequests[i].handle = mDevHandle;
       mTxRequests[i].endpoint = mDefOutEP;
       mTxRequests[i].bufflen = IsoSize;
+      mTxRequests[i].xtype = eIsochronous;
 
-      if (bknd_init_write_xfer(mDevHandle, &mTxRequests[i], rxpktCount, rxpktSize)) {
+      if (bknd_init_xfer(mDevHandle, &mTxRequests[i], rxpktCount, rxpktSize)) {
         mTxRequests[i].ovlp.hEvent = CreateEvent(NULL, FALSE, FALSE, nullptr);
         ZeroMemory(mTxRequests[i].buff, IsoSize);
 
@@ -430,8 +431,9 @@ void CypressDevice::main()
       mRxRequests[i].handle = mDevHandle;
       mRxRequests[i].endpoint = mDefInEP;
       mRxRequests[i].bufflen = IsoSize;
+      mRxRequests[i].xtype = eIsochronous;
 
-      if (bknd_init_read_xfer(mDevHandle, &mRxRequests[i], rxpktCount, rxpktSize)) {
+      if (bknd_init_xfer(mDevHandle, &mRxRequests[i], rxpktCount, rxpktSize)) {
         mRxRequests[i].ovlp.hEvent = CreateEvent(NULL, FALSE, FALSE, nullptr);
       }
     }
@@ -463,14 +465,17 @@ void CypressDevice::main()
   ResetEvent(mASIOHandle);
 
   ZeroMemory(&mXferEp0Status, sizeof(mXferEp0Status));
+  mXferEp0Status.xtype = eControl;
   mXferEp0Status.handle = mDevHandle;
-  mXferEp0Status.bmRequestType = 0xc0;
-  mXferEp0Status.bRequest = LSI8_READ;
-  mXferEp0Status.wValue = 0;
-  mXferEp0Status.wIndex = 2;
-  mXferEp0Status.buff = mEp0Status;
+  mXferEp0Status.stp.bmRequestType = 0xc0;
+  mXferEp0Status.stp.bRequest = LSI8_READ;
+  mXferEp0Status.stp.wValue = 0;
+  mXferEp0Status.stp.wIndex = 2;
+  mXferEp0Status.stp.wLength = 4;
   mXferEp0Status.bufflen = 4;
   mXferEp0Status.ovlp.hEvent = CreateEvent(NULL, FALSE, FALSE, nullptr);
+
+  bknd_init_xfer(mDevHandle, &mXferEp0Status, 0, 0);
 
 
   HANDLE timerH = CreateWaitableTimer(NULL, FALSE, nullptr);
@@ -533,14 +538,13 @@ void CypressDevice::main()
   CancelWaitableTimer(timerH);
   CloseHandle(timerH);
 
-  CloseHandle(mXferEp0Status.ovlp.hEvent);
-
   devClient.FreeBuffers(mINBuff, mOUTBuff);
 
   if (ErrorBreak)
   {
     bknd_abort_pipe(mDevHandle, mDefOutEP);
     bknd_abort_pipe(mDevHandle, mDefInEP);
+    bknd_abort_pipe(mDevHandle, 0);
   }
 
   for (uint32_t c = 0; c < NrXfers; ++c){
@@ -555,6 +559,10 @@ void CypressDevice::main()
       bknd_xfer_cleanup(&mTxRequests[c]);
     }
   }
+
+  WaitForSingleObject(mXferEp0Status.ovlp.hEvent, 500);
+  CloseHandle(mXferEp0Status.ovlp.hEvent);
+  bknd_xfer_cleanup(&mXferEp0Status);
 
   bknd_select_alt_ifc(mDevHandle, 0); //release the bandwidth
 
@@ -718,7 +726,7 @@ void CypressDevice::Ep0StatusCB()
   {
     uint16_t sr;
     uint16_t fifo;
-  } & s = *(struct _t*)mEp0Status;
+  } & s = *(struct _t*) mXferEp0Status.buff ;
 
   uint32_t SR = ConvertSampleRate( s.sr );
   if (mDevStatus.LastSR != SR && mDevStatus.LastSR != -1 && mDevStatus.LastSR != 0)

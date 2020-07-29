@@ -333,10 +333,10 @@ BOOL winusb_control_xfer(XferReq & xf)
 
   WINUSB_SETUP_PACKET  SetupPacket;
   ZeroMemory(&SetupPacket, sizeof(WINUSB_SETUP_PACKET));
-  SetupPacket.RequestType = xf.bmRequestType;
-  SetupPacket.Request = xf.bRequest;
-  SetupPacket.Value = xf.wValue;
-  SetupPacket.Index = xf.wIndex;
+  SetupPacket.RequestType = xf.stp.bmRequestType;
+  SetupPacket.Request = xf.stp.bRequest;
+  SetupPacket.Value = xf.stp.wValue;
+  SetupPacket.Index = xf.stp.wIndex;
   SetupPacket.Length = (uint16_t)xf.bufflen;
 
   if (WinUsb_ControlTransfer(xf.handle, SetupPacket, xf.buff, (ULONG)xf.bufflen, &xf.xfered, &xf.ovlp))
@@ -378,25 +378,33 @@ struct winusb_iso_info
 
 bool winusb_init_xfer(HANDLE handle, XferReq* req, const size_t pktCount, const size_t pktSize)
 {
-  struct winusb_iso_info* bknd_spec = new struct winusb_iso_info;
-  if (nullptr != bknd_spec) {
-    ZeroMemory(bknd_spec, sizeof(struct winusb_iso_info));
-    req->ctx = bknd_spec;
-    if (pktCount > 0 && pktSize > 0) {
-      bknd_spec->alloc = (uint8_t*)_aligned_malloc(pktCount * pktSize, 4096);
-      req->buff = bknd_spec->alloc;
-      memset(req->buff, 0xff, pktCount * pktSize);
-
-      bknd_spec->pktCount = (uint32_t)pktCount;
-      bknd_spec->pktSize = (uint32_t)pktSize;
-
-      bknd_spec->pkts = new USBD_ISO_PACKET_DESCRIPTOR[pktCount];
-      bknd_spec->results = new USBD_ISO_PACKET_DESCRIPTOR[pktCount];
-    }
-    BOOL res = WinUsb_RegisterIsochBuffer(handle, req->endpoint, (PUCHAR)req->buff, (ULONG)(pktCount * pktSize), &bknd_spec->isoBuffHandle);
-    return (TRUE == res) ? true : false;
+  if (eControl == req->xtype)
+  {
+    req->buff = (uint8_t*)_aligned_malloc(req->bufflen , 4096);
+    return req->buff != nullptr;
   }
-  return false;
+  else
+  {
+    struct winusb_iso_info* bknd_spec = new struct winusb_iso_info;
+    if (nullptr != bknd_spec) {
+      ZeroMemory(bknd_spec, sizeof(struct winusb_iso_info));
+      req->ctx = bknd_spec;
+      if (pktCount > 0 && pktSize > 0) {
+        bknd_spec->alloc = (uint8_t*)_aligned_malloc(pktCount * pktSize, 4096);
+        req->buff = bknd_spec->alloc;
+        memset(req->buff, 0xff, pktCount * pktSize);
+
+        bknd_spec->pktCount = (uint32_t)pktCount;
+        bknd_spec->pktSize = (uint32_t)pktSize;
+
+        bknd_spec->pkts = new USBD_ISO_PACKET_DESCRIPTOR[pktCount];
+        bknd_spec->results = new USBD_ISO_PACKET_DESCRIPTOR[pktCount];
+      }
+      BOOL res = WinUsb_RegisterIsochBuffer(handle, req->endpoint, (PUCHAR)req->buff, (ULONG)(pktCount * pktSize), &bknd_spec->isoBuffHandle);
+      return (TRUE == res) ? true : false;
+    }
+    return false;
+  }
 }
 
 
@@ -438,22 +446,29 @@ IsoReqResult winusb_iso_result(XferReq* req, uint32_t idx)
   return result;
 }
 
-bool winusb_iso_cleanup(XferReq* req)
+bool winusb_xfer_cleanup(XferReq* req)
 {
-  struct winusb_iso_info* ctx = (struct winusb_iso_info*)req->ctx;
-  if (ctx)
+  if (eControl == req->xtype)
   {
-    WinUsb_UnregisterIsochBuffer(ctx->isoBuffHandle);
-    if (ctx->alloc) {
-      _aligned_free(ctx->alloc);
-      req->buff = nullptr;
-    }
-    if (ctx->pkts)
-      delete ctx->pkts;
-    if (ctx->results)
-      delete ctx->results;
+    _aligned_free(req->buff);
+  }
+  else if (eIsochronous == req->xtype)
+  {
+    struct winusb_iso_info* ctx = (struct winusb_iso_info*)req->ctx;
+    if (ctx)
+    {
+      WinUsb_UnregisterIsochBuffer(ctx->isoBuffHandle);
+      if (ctx->alloc) {
+        _aligned_free(ctx->alloc);
+        req->buff = nullptr;
+      }
+      if (ctx->pkts)
+        delete ctx->pkts;
+      if (ctx->results)
+        delete ctx->results;
 
-    delete req->ctx;
+      delete req->ctx;
+    }
   }
 
   return true;
@@ -467,14 +482,15 @@ bool winusb_abort_pipe(HANDLE handle, uint8_t ep )
 
 const USB_BKND_OPEN_CLOSE bknd_open = winusb_open;
 const USB_BKND_OPEN_CLOSE bknd_close = winusb_close;
-const USB_BACKEND_CTRL_XFER control_transfer        = winusb_control_transfer;
+const USB_BACKEND_INIT_XFER bknd_init_xfer  = winusb_init_xfer;
+const USB_BACKEND_XFER bknd_xfer_cleanup = winusb_xfer_cleanup;
+
+const USB_BACKEND_CTRL_XFER control_transfer    = winusb_control_transfer;
 const USB_BACKEND_CTRL_XFER_ASYNCH control_xfer = winusb_control_xfer;
-const USB_BACKEND_INIT_ISO_PRIV bknd_init_read_xfer = winusb_init_xfer;
-const USB_BACKEND_INIT_ISO_PRIV bknd_init_write_xfer = winusb_init_xfer;
 const USB_BACKEND_XFER bknd_iso_read            = winusb_iso_read;
 const USB_BACKEND_XFER bknd_iso_write           = winusb_iso_write;
 const USB_BACKEND_ISO_GET_RESULT bknd_iso_get_result= winusb_iso_result;
-const USB_BACKEND_XFER bknd_xfer_cleanup = winusb_iso_cleanup;
+
 const USB_BACKEND_HI bknd_abort_pipe = winusb_abort_pipe;
 const USB_BACKEND_HI bknd_select_alt_ifc = winusb_select_alt_ifc;
 

@@ -111,34 +111,6 @@ error_unload:
 }
 
 
-
-struct libusb_control_setup {
-  /** Request type. Bits 0:4 determine recipient, see
-  * \ref libusb_request_recipient. Bits 5:6 determine type, see
-  * \ref libusb_request_type. Bit 7 determines data transfer direction, see
-  * \ref libusb_endpoint_direction.
-  */
-  uint8_t  bmRequestType;
-
-  /** Request. If the type bits of bmRequestType are equal to
-  * \ref libusb_request_type::LIBUSB_REQUEST_TYPE_STANDARD
-  * "LIBUSB_REQUEST_TYPE_STANDARD" then this field refers to
-  * \ref libusb_standard_request. For other cases, use of this field is
-  * application-specific. */
-  uint8_t  bRequest;
-
-  /** Value. Varies according to request */
-  uint16_t wValue;
-
-  /** Index. Varies according to request, typically used to pass an index
-  * or offset */
-  uint16_t wIndex;
-
-  /** Number of bytes to transfer */
-  uint16_t wLength;
-};
-
-
 int GetDeviceID(USB_DK_DEVICE_ID* ret)
 {
   const int id_vendor = 0x221A;  	// ZTEX vendor ID
@@ -217,11 +189,11 @@ bool usbdk_close(HANDLE& dev, HANDLE& file)
 int64_t usbdk_control_transfer(HANDLE handle, uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue, uint16_t wIndex,
   unsigned char *data, uint16_t wLength, unsigned int timeout)
 {
-  uint32_t sendlen = sizeof(libusb_control_setup) + wLength;
+  uint32_t sendlen = sizeof(usb_control_setup) + wLength;
   if (sendlen > 4096)
     return -1;
   uint8_t sendbuff[4096];
-  struct libusb_control_setup &setup = *(struct libusb_control_setup *)sendbuff;
+  struct usb_control_setup &setup = *(struct usb_control_setup *)sendbuff;
   setup.bmRequestType = bmRequestType;
   setup.bRequest = bRequest;
   setup.wValue = wValue;
@@ -240,51 +212,20 @@ int64_t usbdk_control_transfer(HANDLE handle, uint8_t bmRequestType, uint8_t bRe
   if (bmRequestType & 0x80)
     result = UsbDk.ReadPipe(handle, &xfer, nullptr);// &ovlp);
   else {
-    memcpy(sendbuff + sizeof(libusb_control_setup), data, wLength);
+    memcpy(sendbuff + sizeof(usb_control_setup), data, wLength);
     result = UsbDk.WritePipe(handle, &xfer, nullptr);// &ovlp);
   }
 
   if (result != TransferFailure && xfer.Result.GenResult.UsbdStatus == USBD_STATUS_SUCCESS) {
 
     if (bmRequestType & 0x80)
-      memcpy(data, sendbuff + sizeof(libusb_control_setup), (size_t)xfer.Result.GenResult.BytesTransferred);
+      memcpy(data, sendbuff + sizeof(usb_control_setup), (size_t)xfer.Result.GenResult.BytesTransferred);
 
     return xfer.Result.GenResult.BytesTransferred;
   } else {
     return -1;
   }
 }
-
-//int64_t bulk_transfer(HANDLE handle,
-//  uint8_t endpoint, uint8_t *data, int length,
-//  int *actual_length, OVERLAPPED * ovlp, unsigned int timeout)
-//{
-//  USB_DK_TRANSFER_REQUEST xfer;
-//  ZeroMemory(&xfer, sizeof(USB_DK_TRANSFER_REQUEST));
-//  xfer.EndpointAddress = endpoint;
-//  xfer.TransferType = BulkTransferType;
-//  xfer.Buffer = data;
-//  xfer.BufferLength = length;
-//
-//  TransferResult result;
-//  if (endpoint & 0x80)
-//    result = UsbDk.ReadPipe(handle, &xfer, ovlp);
-//  else
-//    result = UsbDk.WritePipe(handle, &xfer, ovlp);
-//
-//  if(ovlp)
-//    WaitForSingleObject(ovlp->hEvent, timeout);
-//
-//  USBD_STATUS status = (USBD_STATUS)xfer.Result.GenResult.UsbdStatus;
-//  *actual_length = (int)xfer.Result.GenResult.BytesTransferred;
-//
-//  switch (result)
-//  {
-//  case TransferFailure: return -1;
-//  default:
-//    return status;
-//  }
-//}
 
 struct usbdk_req
 {
@@ -299,32 +240,71 @@ struct usbdk_req
 bool usbdk_init_xfer(HANDLE handle, XferReq* req, const size_t pktCount, const size_t pktSize )
 {
   struct usbdk_req* ctx = new struct usbdk_req;
-  USB_DK_TRANSFER_TYPE type = BulkTransferType;
 
   if (nullptr != ctx) {
     ZeroMemory(ctx, sizeof(struct usbdk_req));
     req->ctx = ctx;
-    if (pktCount > 0 && pktSize > 0) {
-      ctx->alloc = (uint8_t*)_aligned_malloc(pktCount * pktSize, 4096);
-      req->buff = ctx->alloc;
 
-      ctx->pktCount = (uint32_t)pktCount;
-      ctx->pktSize = (uint32_t)pktSize;
+    switch (req->xtype)
+    {
+    case eControl:
+      ctx->alloc = (uint8_t*)_aligned_malloc(req->bufflen + sizeof(usb_control_setup) , 4096);
+      req->buff = ctx->alloc + sizeof(usb_control_setup);
+      break;
+    case eInterrupt:  break;
+    case eBulk:       break;
+    case eIsochronous:
+      if (pktCount > 0 && pktSize > 0) {
+        ctx->alloc = (uint8_t*)_aligned_malloc(pktCount * pktSize, 4096);
+        req->buff = ctx->alloc;
 
-      ctx->pkts = new PVOID64[pktCount];
-      ctx->results = new USB_DK_ISO_TRANSFER_RESULT[pktCount];
+        ctx->pktCount = (uint32_t)pktCount;
+        ctx->pktSize = (uint32_t)pktSize;
 
-      for (uint32_t c = 0; c < pktCount; ++c)
-        ctx->pkts[c] = (PVOID64)(uint64_t)pktSize;
+        ctx->pkts = new PVOID64[pktCount];
+        ctx->results = new USB_DK_ISO_TRANSFER_RESULT[pktCount];
 
-      type = IsochronousTransferType;
-    }
+        for (uint32_t c = 0; c < pktCount; ++c)
+          ctx->pkts[c] = (PVOID64)(uint64_t)pktSize;
 
-    ctx->req = { req->endpoint, req->buff, req->bufflen, (ULONG64)type, pktCount, ctx->pkts };
-    ctx->req.Result.IsochronousResultsArray = ctx->results;
+        ctx->req = { req->endpoint, req->buff, req->bufflen, IsochronousTransferType, pktCount, ctx->pkts };
+        ctx->req.Result.IsochronousResultsArray = ctx->results;
+      }
+      break;
+    default:break;
+    };
+
+
+    
     return true;
   }
+
+  
   return false;
+}
+
+BOOL usbdk_control_xfer(XferReq & req)
+{
+  struct usbdk_req* ctx = (struct usbdk_req*)req.ctx;
+
+  struct usb_control_setup& setup = *(struct usb_control_setup*)ctx->alloc;
+  setup.bmRequestType = req.stp.bmRequestType;
+  setup.bRequest = req.stp.bRequest;
+  setup.wValue = req.stp.wValue;
+  setup.wIndex = req.stp.wIndex;
+  setup.wLength = req.stp.wLength;
+
+  ZeroMemory(&ctx->req, sizeof(USB_DK_TRANSFER_REQUEST));
+  ctx->req.EndpointAddress = req.endpoint;
+  ctx->req.TransferType = ControlTransferType;
+  ctx->req.Buffer = ctx->alloc;
+  ctx->req.BufferLength = sizeof(usb_control_setup) + req.stp.wLength;
+
+
+  if (req.stp.bmRequestType & 0x80)
+    return UsbDk.ReadPipe(req.handle, &ctx->req,  &req.ovlp);
+  else
+    return UsbDk.WritePipe(req.handle, &ctx->req, &req.ovlp);
 }
 
 bool usbdk_iso_read(XferReq* req)
@@ -386,28 +366,23 @@ bool usbdk_abort_pipe(HANDLE handle, uint8_t ep)
 {
   return UsbDk.AbortPipe(handle, ep);
 }
-/*
-bool usbdk_bulk_xfer(XferReq* req)
+bool usbdk_select_alt_ifc(HANDLE handle, uint8_t ai)
 {
-  struct usbdk_req* ctx = (struct usbdk_req*)req->ctx;
-  if (ctx == nullptr)
-    return false;
-
-  ctx->req.BufferLength = req->bufflen;
-  ctx->req.Buffer = req->buff;
-  return req->endpoint & 0x80  ?
-    UsbDk.ReadPipe(req->handle, &ctx->req, req->ovlp.hEvent ? &req->ovlp : nullptr) == TransferSuccessAsync : 
-    UsbDk.WritePipe(req->handle, &ctx->req, req->ovlp.hEvent ? &req->ovlp : nullptr) == TransferSuccessAsync;
+  return UsbDk.SetAltsetting(handle, 0/*must be*/, ai);
 }
 
+/*
 const USB_BKND_OPEN_CLOSE bknd_open          = usbdk_open;
 const USB_BKND_OPEN_CLOSE bknd_close         = usbdk_close;
+const USB_BACKEND_INIT_XFER bknd_init_xfer   = usbdk_init_xfer;
+const USB_BACKEND_XFER bknd_xfer_cleanup     = usbdk_xfer_cleanup;
+
 const USB_BACKEND_CTRL_XFER control_transfer        = usbdk_control_transfer;
-const USB_BACKEND_INIT_ISO_PRIV bknd_init_read_xfer  = usbdk_init_xfer;
-const USB_BACKEND_INIT_ISO_PRIV bknd_init_write_xfer = usbdk_init_xfer;
+const USB_BACKEND_CTRL_XFER_ASYNCH control_xfer = usbdk_control_xfer;
 const USB_BACKEND_XFER bknd_iso_read            = usbdk_iso_read;
 const USB_BACKEND_XFER bknd_iso_write           = usbdk_iso_write;
 const USB_BACKEND_ISO_GET_RESULT bknd_iso_get_result = usbdk_iso_result;
-const USB_BACKEND_XFER bknd_xfer_cleanup = usbdk_xfer_cleanup;
-const USB_BACKEND_ABORT bknd_abort_pipe = usbdk_abort_pipe;
+
+const USB_BACKEND_HI bknd_abort_pipe = usbdk_abort_pipe;
+const USB_BACKEND_HI bknd_select_alt_ifc = usbdk_select_alt_ifc;
 */
